@@ -80,7 +80,7 @@ class RevDEOptimizer(ABC, Process):
         process_id_gen: ProcessIdGen,
         rng: Random,
         population_size: int,
-        initial_population: List[CpgNetworkStructure],
+        initial_population: List[np.float_],
         scaling: float,
         cross_prob: float,
     ) -> None:
@@ -242,20 +242,13 @@ class RevDEOptimizer(ABC, Process):
         )
         individual_map = {i.individual: i for i in individual_rows}
 
-        individuals = await Ndarray1xnSerializer.from_database(session, individual_ids)            
+        individuals = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in individual_ids]
+        self.__latest_population = np.array(individuals)
+        fitnesses = [i.fitness for i in individual_rows]
+        self.__latest_fitnesses = np.array(fitnesses)
 
         if not len(individual_ids) == len(individual_rows):
             raise IncompatibleError()
-
-        if self.__gen_num == 0:
-            self.__latest_fitnesses = None
-        else:
-            fitness_ids = [individual_map[id].fitness for id in individual_ids]
-            fitnesses = await FloatSerializer.from_database(
-                session, fitness_ids
-            )
-            assert len(fitnesses) == len(fitness_ids)
-            self.__latest_fitnesses = fitnesses
 
         return True
 
@@ -308,21 +301,13 @@ class RevDEOptimizer(ABC, Process):
                     )
 
                     # save new individuals
-                    db_individual_ids = await Ndarray1xnSerializer.to_database(
-                        session, [i for i in self.__latest_population]
-                    )
+                    db_individual_ids = []
+                    for ind in self.__latest_population:
+                        id = await Ndarray1xnSerializer.to_database(
+                            session, [ind]
+                        )
+                        db_individual_ids += id
                     assert len(db_individual_ids) == len(self.__latest_population)
-                    fitness_ids2: List[Optional[int]]
-                    if self.__latest_fitnesses is not None:
-                        fitness_ids2 = [
-                            f
-                            for f in await FloatSerializer.to_database(
-                                session, self.__latest_fitnesses
-                            )
-                        ]  # this extra comprehension is useless but it stops mypy from complaining
-                        assert len(fitness_ids2) == len(self.__latest_fitnesses)
-                    else:
-                        fitness_ids2 = [None for _ in range(len(self.__latest_population))]
 
                     session.add_all(
                         [

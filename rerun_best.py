@@ -9,8 +9,8 @@ from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic,
     make_cpg_network_structure_neighbour,
 )
-from revolve2.core.optimization.ea.openai_es import DbOpenaiESOptimizerIndividual
-from revolve2.runners.mujoco import ModularRobotRerunner
+from revde import DbRevDEOptimizerIndividual
+from revolve2.runners.isaacgym import ModularRobotRerunner
 from revolve2.standard_resources.modular_robots import gecko
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -23,8 +23,8 @@ async def main() -> None:
         best_individual = (
             (
                 await session.execute(
-                    select(DbOpenaiESOptimizerIndividual).order_by(
-                        DbOpenaiESOptimizerIndividual.fitness.desc()
+                    select(DbRevDEOptimizerIndividual).order_by(
+                        DbRevDEOptimizerIndividual.fitness.desc()
                     )
                 )
             )
