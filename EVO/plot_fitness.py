@@ -10,7 +10,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas
 from revolve2.core.database import open_database_sqlite
-from revde import DbRevDEOptimizerIndividual
+from revde_optimizer import DbRevDEOptimizerIndividual
 from sqlalchemy.future import select
 
 

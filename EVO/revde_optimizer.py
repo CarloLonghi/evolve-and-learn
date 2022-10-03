@@ -128,7 +128,7 @@ class RevDEOptimizer(ABC, Process):
             process_id=self.__process_id,
             population_size=self.__population_size,
             initial_rng=pickle.dumps(self.__rng.getstate()),
-            scaling = scaling,
+            scaling=scaling,
             cross_prob=cross_prob,
         )
         session.add(dbopt)

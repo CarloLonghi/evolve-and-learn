@@ -9,7 +9,7 @@ from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic,
     make_cpg_network_structure_neighbour,
 )
-from revde import DbRevDEOptimizerIndividual
+from revde_optimizer import DbRevDEOptimizerIndividual
 from revolve2.runners.isaacgym import ModularRobotRerunner
 from revolve2.standard_resources.modular_robots import gecko
 from sqlalchemy.ext.asyncio.session import AsyncSession

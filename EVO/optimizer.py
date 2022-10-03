@@ -15,8 +15,7 @@ from revolve2.core.modular_robot.brains import (
     make_cpg_network_structure_neighbour,
 )
 from revolve2.core.optimization import ProcessIdGen
-from revolve2.core.optimization.ea.openai_es import OpenaiESOptimizer
-from revde import RevDEOptimizer
+from revde_optimizer import RevDEOptimizer
 from revolve2.core.physics.actor import Actor
 from revolve2.core.physics.running import (
     ActorControl,
