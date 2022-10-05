@@ -223,7 +223,7 @@ class RevDEOptimizer(ABC, Process):
             .all()
         )
 
-        individual_ids = [row.individual_id for row in gen_rows]
+        generation_ids = [row.individual_id for row in gen_rows]
 
         individual_rows = (
             (
@@ -233,14 +233,16 @@ class RevDEOptimizer(ABC, Process):
                             DbRevDEOptimizerIndividual.process_id
                             == self.__process_id
                         )
-                        & (DbRevDEOptimizerIndividual.individual.in_(individual_ids))
+                        & (DbRevDEOptimizerIndividual.individual.in_(generation_ids))
                     )
+                    .order_by(DbRevDEOptimizerIndividual.fitness)
                 )
             )
             .scalars()
             .all()
         )
-        individual_map = {i.individual: i for i in individual_rows}
+        individual_rows = individual_rows[-self.__population_size:]
+        individual_ids = [row.individual for row in individual_rows]
 
         individuals = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in individual_ids]
         self.__latest_population = np.array(individuals)
@@ -302,12 +304,12 @@ class RevDEOptimizer(ABC, Process):
 
                     # save new individuals
                     db_individual_ids = []
-                    for ind in self.__latest_population:
+                    for ind in full_candidates:
                         id = await Ndarray1xnSerializer.to_database(
                             session, [ind]
                         )
                         db_individual_ids += id
-                    assert len(db_individual_ids) == len(self.__latest_population)
+                    assert len(db_individual_ids) == len(full_candidates)
 
                     session.add_all(
                         [
@@ -319,7 +321,7 @@ class RevDEOptimizer(ABC, Process):
                                 fitness=fitness,
                             )
                         for index, id, fitness in zip(
-                            range(len(self.__latest_population)), db_individual_ids, self.__latest_fitnesses
+                            range(len(full_candidates)), db_individual_ids, full_fitnesses
                         )
                         ]
                     )

@@ -10,7 +10,7 @@ from revolve2.core.modular_robot.brains import (
     make_cpg_network_structure_neighbour,
 )
 from revde_optimizer import DbRevDEOptimizerIndividual
-from revolve2.runners.isaacgym import ModularRobotRerunner
+from revolve2.runners.mujoco import ModularRobotRerunner
 from revolve2.standard_resources.modular_robots import gecko
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
