@@ -41,7 +41,7 @@ class LocalRunnerTrain(Runner):
         Suspect that this is because of some floating point rounding error.
         So, for reproducability, all environments will be exactly at the origin.
         """
-        ENV_SIZE = 0.0
+        ENV_SIZE = 0.5
 
         @dataclass
         class GymEnv:
@@ -193,7 +193,7 @@ class LocalRunnerTrain(Runner):
                     # TODO make all this configurable.
                     props = self._gym.get_actor_dof_properties(env, actor_handle)
                     props["driveMode"].fill(gymapi.DOF_MODE_POS)
-                    props["stiffness"].fill(5.0)
+                    props["stiffness"].fill(1.0)
                     props["damping"].fill(0.05)
                     self._gym.set_actor_dof_properties(env, actor_handle, props)
 
@@ -280,9 +280,15 @@ class LocalRunnerTrain(Runner):
                     new_observations[0] = torch.tensor(pos_sliding, dtype=torch.float32)
                     new_observations[1] = torch.tensor(orientation, dtype=torch.float32)
 
-                    
+                    new_actions = []
+                    new_values = []
+                    new_logps = []
                     for i, control in enumerate(controls):
-                        new_actions, new_values, new_logps = self._batch.control(i, control_step, control, new_observations)
+                        act, val, logp = self._batch.control(i, control_step, control, [obs[i,:] for obs in new_observations])
+                        new_actions.append(act.tolist())
+                        new_values.append(val.tolist())
+                        new_logps.append(logp.tolist())
+
                     dof_targets = [
                         (env_index, actor_index, targets)
                         for env_index, control in enumerate(controls)
@@ -330,7 +336,7 @@ class LocalRunnerTrain(Runner):
                 # after number of steps do training
                 if timestep >= (NUM_STEPS + 1):
 
-                    buffer.set_next_state_value(values)
+                    buffer.set_last_value(values)
 
                     print(f"\nAverage cumulative reward after {NUM_STEPS} steps: {np.mean(np.mean(sum_rewards, axis=0))}")
                     print(f"Average state value: {np.mean(mean_values)}")

@@ -95,12 +95,12 @@ class RLcontroller(ActorController):
                 obj2 = torch.clamp(ratio, 1.0 - PPO_CLIP_EPS, 1.0 + PPO_CLIP_EPS) * adv # ratio clipping
                 print(f"Percentage of clipped ratios: {int((abs(ratio) - 1 > PPO_CLIP_EPS).sum() / ratio.shape[0] * 100)}%")
                 ppo_loss = -torch.min(obj1, obj2).mean() # policy loss
-                #print(f"[CRITIC LOSS]: {val_loss:.10f}     [ACTOR LOSS]: {ppo_loss:.10f}      [ENTROPY]: {entropy:.10f}")
 
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
                 val_loss = (ret - value).pow(2).mean() # value loss
                 ppo_loss = ACTOR_LOSS_COEFF * ppo_loss - ENTROPY_COEFF * entropy
+                #print(f"[CRITIC LOSS]: {val_loss:.10f}     [ACTOR LOSS]: {ppo_loss:.10f}      [ENTROPY]: {entropy:.10f}")
                 ppo_loss.backward()
                 val_loss.backward()
                 ppo_losses.append(ppo_loss.item())

@@ -4,7 +4,7 @@ import argparse
 from optimizer import RLOptimizer 
 from random import Random
 from config import NUM_PARALLEL_AGENT, SAMPLING_FREQUENCY, CONTROL_FREQUENCY, SIMULATION_TIME
-from revolve2.standard_resources.modular_robots import gecko
+from revolve2.standard_resources.modular_robots import *
 
 async def main() -> None:
 
@@ -35,7 +35,7 @@ async def main() -> None:
     rng = Random()
     rng.seed(42)
 
-    body = gecko()
+    body = spider()
 
     optimizer = RLOptimizer(
         rng=rng,

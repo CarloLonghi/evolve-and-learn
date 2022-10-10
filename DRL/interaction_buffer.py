@@ -15,12 +15,11 @@ class Buffer(object):
             self.observations.append(torch.zeros(NUM_STEPS, num_agents, dim))
 
         self.actions = torch.zeros(NUM_STEPS, num_agents, act_dim)
-        self.values = torch.zeros(NUM_STEPS, num_agents)
+        self.values = torch.zeros(NUM_STEPS + 1, num_agents)
         self.rewards = torch.zeros(NUM_STEPS, num_agents)
         self.logps = torch.zeros(NUM_STEPS, num_agents)
         self.advantages = torch.zeros(NUM_STEPS, num_agents)
         self.returns = torch.zeros(NUM_STEPS, num_agents)
-        self.next_state_value = torch.zeros(num_agents)
 
         self.num_agents = num_agents
         self.obs_dim = obs_dim
@@ -30,6 +29,7 @@ class Buffer(object):
     def insert(self, obs, act, logp, val, rew):
         """
         Insert a new step in the replay buffer
+        Used when inserting the data of a new step for multiple agents
         args:
             obs: observation at the current state
             act: action performed at the state
@@ -46,23 +46,49 @@ class Buffer(object):
 
         self.step += 1
 
-    def set_next_state_value(self, next_state_value):
+    def insert_single(self, idx, obs, act, logp, val, rew):
+        """
+        Insert a new step in the replay buffer
+        Used when inserting the data of a new step for a single agent
+        args:
+            idx: the index of the agent to which the data is referred
+            obs: observation at the current state
+            act: action performed at the state
+            logp: log probability of the action performed according to the current policy
+            val: value of the state
+            rew: reward received for performing the action
+        """
+        for i, observation in enumerate(obs):
+            self.observations[i][self.step, idx] = torch.from_numpy(observation)
+        self.actions[self.step, idx] = torch.tensor(act)
+        self.values[self.step, idx] = torch.tensor(val)
+        self.rewards[self.step, idx] = rew
+        self.logps[self.step, idx] = torch.tensor(logp)
+
+        self.step += 1
+
+    def set_last_value(self, next_state_value):
         """
         Insert the value of the last state reached
         """
-        self.next_state_value = torch.tensor(next_state_value)[:,0]
+        self.values[-1] = next_state_value
+
+    def set_single_last_value(self, idx, next_state_value):
+        """
+        Insert the value of the last state reached
+        """
+        self.values[-1, idx] = next_state_value
 
     def _compute_advantages(self):
         """
         Compute the advantage function and the returns used to compute the loss
         """
         adv = 0
-        vals = torch.cat((self.values, self.next_state_value.unsqueeze(0)), dim=0)
         for t in range((NUM_STEPS -1), -1, -1):
-            delta = self.rewards[t] + PPO_GAMMA * vals[t+1] - vals[t]
+            delta = self.rewards[t] + PPO_GAMMA * self.values[t+1] - self.values[t]
             adv = delta + (PPO_LAMBDA * PPO_GAMMA) * adv
             self.advantages[t] = adv
-            self.returns[t] = adv + vals[t]
+            self.returns[t] = adv + self.values[t]
 
     def _normalize_rewards(self):
         """
@@ -100,3 +126,6 @@ class Buffer(object):
             adv = self.advantages.view(-1)[idxs]
             ret = self.returns.view(-1)[idxs]
             yield obs, val, act, logp_old, rew, adv, ret
+
+    def reset_step_count(self):
+        self.step = 0
