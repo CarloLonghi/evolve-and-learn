@@ -108,7 +108,7 @@ class RevDEOptimizer(ABC, Process):
         self.__population_size = population_size
         self.__latest_population = initial_population
 
-        self.__gen_num = 0
+        self.__gen_num = 1
 
         self.__scaling = scaling
         self.__cross_prob = cross_prob
@@ -228,20 +228,18 @@ class RevDEOptimizer(ABC, Process):
         individual_rows = (
             (
                 await session.execute(
-                    select(DbRevDEOptimizerIndividual).filter(
+                    select(DbRevDEOptimizerBestIndividual).filter(
                         (
-                            DbRevDEOptimizerIndividual.process_id
+                            DbRevDEOptimizerBestIndividual.process_id
                             == self.__process_id
                         )
-                        & (DbRevDEOptimizerIndividual.individual.in_(generation_ids))
+                        & (DbRevDEOptimizerBestIndividual.individual.in_(generation_ids))
                     )
-                    .order_by(DbRevDEOptimizerIndividual.fitness)
                 )
             )
             .scalars()
             .all()
         )
-        individual_rows = individual_rows[-self.__population_size:]
         individual_ids = [row.individual for row in individual_rows]
 
         individuals = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in individual_ids]
@@ -252,11 +250,13 @@ class RevDEOptimizer(ABC, Process):
         if not len(individual_ids) == len(individual_rows):
             raise IncompatibleError()
 
+        self.__gen_num += 1
+
         return True
 
     async def run(self) -> None:
         """Run the optimizer."""
-        if self.generation_number == 0:
+        if self.generation_number == 1:
             logging.info(f"Evaluating initial population")
             fitnesses = await self._evaluate_population(
                 self.__database,
@@ -288,8 +288,6 @@ class RevDEOptimizer(ABC, Process):
             self.__latest_population = full_candidates[indexes,:]
             self.__latest_fitnesses = full_fitnesses[indexes]
 
-            self.__gen_num += 1
-
             async with AsyncSession(self.__database) as session:
                 async with session.begin():
 
@@ -302,14 +300,17 @@ class RevDEOptimizer(ABC, Process):
                         )
                     )
 
+                    if self.generation_number == 1:
+                        candidates = full_candidates
+
                     # save new individuals
                     db_individual_ids = []
-                    for ind in full_candidates:
+                    for ind in candidates:
                         id = await Ndarray1xnSerializer.to_database(
                             session, [ind]
                         )
                         db_individual_ids += id
-                    assert len(db_individual_ids) == len(full_candidates)
+                    assert len(db_individual_ids) == len(candidates)
 
                     session.add_all(
                         [
@@ -321,12 +322,35 @@ class RevDEOptimizer(ABC, Process):
                                 fitness=fitness,
                             )
                         for index, id, fitness in zip(
-                            range(len(full_candidates)), db_individual_ids, full_fitnesses
+                            range(len(candidates)), db_individual_ids, full_fitnesses
                         )
                         ]
                     )
 
-                    # save current generation
+                    # save current generation for revovery
+                    db_generation_ids = []
+                    for ind in self.__latest_population:
+                        id = await Ndarray1xnSerializer.to_database(
+                            session, [ind]
+                        )
+                        db_generation_ids += id
+                    assert len(db_generation_ids) == len(self.__latest_population)
+
+                    session.add_all(
+                        [
+                            DbRevDEOptimizerBestIndividual(
+                                process_id=self.__process_id,
+                                gen_num=self.__gen_num,
+                                gen_index=index,
+                                individual=id,
+                                fitness=fitness,
+                            )
+                        for index, id, fitness in zip(
+                            range(len(candidates)), db_generation_ids, self.__latest_fitnesses
+                        )
+                        ]
+                    )
+
                     session.add_all(
                         [
                             DbRevDEOptimizerGeneration(
@@ -335,10 +359,11 @@ class RevDEOptimizer(ABC, Process):
                                 gen_index=index,
                                 individual_id=individual_id,
                             )
-                            for index, individual_id in enumerate(db_individual_ids)
+                            for index, individual_id in enumerate(db_generation_ids)
                         ]
                     )
                     logging.info(f"Finished generation {self.__gen_num}")
+                    self.__gen_num += 1
 
     def proposal(self, theta):
         theta_0 = np.expand_dims(theta, 1) # B x 1 x D
@@ -406,6 +431,19 @@ class DbRevDEOptimizerIndividual(DbBase):
     """An individual with a fitness which may or may not be assigned."""
 
     __tablename__ = "revde_optimizer_individual"
+
+    process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    gen_index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    individual = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey(DbNdarray1xn.id), nullable=False
+    )
+    fitness = sqlalchemy.Column(sqlalchemy.Float, nullable=True)
+
+class DbRevDEOptimizerBestIndividual(DbBase):
+    """An individual with a fitness which may or may not be assigned."""
+
+    __tablename__ = "revde_optimizer_best_individual"
 
     process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)

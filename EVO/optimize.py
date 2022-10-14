@@ -1,12 +1,13 @@
 """Setup and running of the openai es optimization program."""
 
+import argparse
 import logging
 from random import Random
 
 from optimizer import Optimizer
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.optimization import ProcessIdGen
-from revolve2.standard_resources.modular_robots import gecko
+from revolve2.standard_resources import modular_robots
 
 
 async def main() -> None:
@@ -18,7 +19,7 @@ async def main() -> None:
 
     SIMULATION_TIME = 30
     SAMPLING_FREQUENCY = 5
-    CONTROL_FREQUENCY = 60
+    CONTROL_FREQUENCY = 5
 
     logging.basicConfig(
         level=logging.INFO,
@@ -30,13 +31,13 @@ async def main() -> None:
     rng.seed(0)
 
     # database
-    database = open_async_database_sqlite("./database")
+    database = open_async_database_sqlite('./database')
 
     # process id generator
     process_id_gen = ProcessIdGen()
     process_id = process_id_gen.gen()
 
-    body = gecko()
+    body = modular_robots.gecko()
 
     maybe_optimizer = await Optimizer.from_database(
         database=database,
@@ -51,7 +52,7 @@ async def main() -> None:
     )
     if maybe_optimizer is not None:
         logging.info(
-            f"Recovered. Last finished generation: {maybe_optimizer.generation_number}."
+            f"Recovered. Last finished generation: {maybe_optimizer.generation_number - 1}."
         )
         optimizer = maybe_optimizer
     else:

@@ -10,7 +10,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas
 from revolve2.core.database import open_database_sqlite
-from revde_optimizer import DbRevDEOptimizerIndividual
+from revde_optimizer import DbRevDEOptimizerIndividual, DbRevDEOptimizerBestIndividual
 from sqlalchemy.future import select
 
 
@@ -31,13 +31,9 @@ def plot(database: str, process_id: int) -> None:
         db,
     )
     # calculate max min avg
-    describe = df[["gen_num", "fitness"]].groupby(by="gen_num").describe()["fitness"]
-    mean = describe[["mean"]].values.squeeze()
-    std = describe[["std"]].values.squeeze()
+    describe = df.sort_values(by='individual')[["fitness"]]
 
-    # plot max min mean, std
-    describe[["max", "mean", "min"]].plot()
-    plt.fill_between(range(1, len(mean) + 1), mean - std, mean + std)
+    describe.plot()
     plt.show()
 
 
