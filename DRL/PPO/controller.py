@@ -1,6 +1,7 @@
 from __future__ import annotations
 from asyncore import write
 import csv
+import logging
 
 from typing import List
 
@@ -13,10 +14,10 @@ from revolve2.actor_controller import ActorController
 from revolve2.serialization import SerializeError, StaticData
 
 from interaction_buffer import Buffer
-from actor_critic_network import Actor, ActorCritic, Critic, ObservationEncoder
-from config import LR_ACTOR, LR_CRITIC, PPO_CLIP_EPS, NUM_ITERATIONS, LR_ACTOR, LR_CRITIC, N_EPOCHS, CRITIC_LOSS_COEFF, ENTROPY_COEFF, ACTOR_LOSS_COEFF
+from network import Actor, ActorCritic, Critic, ObservationEncoder
+from config import LR_ACTOR, LR_CRITIC, PPO_CLIP_EPS, NUM_ITERATIONS, LR_ACTOR, LR_CRITIC, N_EPOCHS, CRITIC_LOSS_COEFF, ENTROPY_COEFF, ACTOR_LOSS_COEFF, ACTION_CONSTRAINT
 
-class RLcontroller(ActorController):
+class PPOcontroller(ActorController):
     _num_input_neurons: int
     _num_output_neurons: int
     _dof_ranges: npt.NDArray[np.float_]
@@ -42,7 +43,7 @@ class RLcontroller(ActorController):
         self.critic_optimizer = Adam(critic_params, lr=LR_CRITIC)
         #self.optimizer = Adam([p for p in self._actor_critic.parameters() if p.requires_grad])
         if from_checkpoint:
-            checkpoint = torch.load("DRL/model_states/last_checkpoint")
+            checkpoint = torch.load("ppo_model_states/last_checkpoint")
             self._iteration_num = checkpoint['iteration']
             self._actor_critic.load_state_dict(checkpoint['model_state'])
             self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state'])
@@ -65,7 +66,7 @@ class RLcontroller(ActorController):
             buffer: replay buffer containing the data for the last timesteps
         """
 
-        print(f"\nITERATION NUM: {self._iteration_num + 1}")
+        logging.info(f"ITERATION NUM: {self._iteration_num + 1}")
 
         # learning rate decreases linearly
         lr_linear_decay(self.actor_optimizer, self._iteration_num, NUM_ITERATIONS, LR_ACTOR)
@@ -109,20 +110,20 @@ class RLcontroller(ActorController):
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
 
-            print(f"EPOCH {epoch + 1} loss ppo:  {np.mean(ppo_losses):.5f}, loss val: {np.mean(val_losses):.5f}")
-            print()
+            logging.info(f"EPOCH {epoch + 1} loss ppo:  {np.mean(ppo_losses):.5f}, loss val: {np.mean(val_losses):.5f}")
+            
         state = {
             'iteration': self._iteration_num,
             'model_state': self._actor_critic.state_dict(),
             'actor_optimizer_state': self.actor_optimizer.state_dict(),
             'critic_optimizer_state': self.critic_optimizer.state_dict(),
         }
-        torch.save(state, "DRL/model_states/last_checkpoint")
+        torch.save(state, "ppo_model_states/last_checkpoint")
 
         # log statistics
         mean_rew = torch.mean(torch.mean(buffer.rewards, axis=0)).item()
         mean_val = torch.mean(torch.mean(buffer.values, axis=0)).item()
-        with open('DRL/model_states/statistics.csv', 'a', encoding='UTF8', newline='') as f:
+        with open('ppo_model_states/statistics.csv', 'a', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([mean_rew, mean_val])
 
@@ -141,7 +142,7 @@ class RLcontroller(ActorController):
 
     # TODO
     @classmethod
-    def deserialize(cls, data: StaticData) -> RLcontroller:
+    def deserialize(cls, data: StaticData) -> PPOcontroller:
         if (
             not type(data) == dict
             or not "actor_state" in data
@@ -166,7 +167,7 @@ class RLcontroller(ActorController):
         network.actor = actor
         network.critic = critic
         network.encoder = encoder
-        return RLcontroller(
+        return PPOcontroller(
             network,
             np.array(data["dof_ranges"]),
         )

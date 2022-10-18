@@ -58,7 +58,7 @@ class LocalRunnerTrain(Runner):
         """
         self._headless = headless
 
-    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int) -> BatchResults:
+    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int, initial_pos) -> BatchResults:
         """
         Run the provided batch by simulating each contained environment.
 
@@ -74,8 +74,6 @@ class LocalRunnerTrain(Runner):
         results = BatchResults([EnvironmentResults([]) for _ in batch.environments])
 
         num_joints =  len(batch.environments[0].actors[0].actor.joints)
-        obs_dims = (num_joints*NUM_OBS_TIMES, 4)
-        buffer = Buffer(obs_dims, num_joints, self._num_agents)
         sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
         sum_values = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
 
@@ -92,7 +90,6 @@ class LocalRunnerTrain(Runner):
                 for posed_actor in env_descr.actors
                 for dof_state in posed_actor.dof_states
             ]
-            initial_targets = np.random.uniform(low=-1, high=1, size=num_joints)
             self._set_dof_targets(data, initial_targets)
 
             for posed_actor in env_descr.actors:
@@ -111,10 +108,8 @@ class LocalRunnerTrain(Runner):
                 EnvironmentState(0.0, self._get_actor_states(env_descr, data, model))
             )
 
-            old_position = results.environment_results[env_index].environment_states[0].actor_states[0].position
             new_observation = [[] for _ in range(NUM_OBSERVATIONS)]
             pos_sliding = np.zeros(NUM_OBS_TIMES*num_joints)
-            buffer.reset_step_count()
             timestep = 0
 
             while (time := data.time) < batch.simulation_time and timestep <= NUM_STEPS:
@@ -153,30 +148,6 @@ class LocalRunnerTrain(Runner):
                         # get the new positions of each agent
                         new_position = results.environment_results[env_index].environment_states[-1].actor_states[0].position
                         
-                        # compute the rewards from the new and old positions of the agents
-                        reward = self._calculate_velocity(old_position, new_position)                       
-
-                        # insert data of the current state in the replay buffer
-                        buffer.insert_single(
-                                        idx=env_index,
-                                        obs=observation,
-                                        act=action,
-                                        logp=logp,
-                                        val=value,
-                                        rew=reward
-                                        )
-
-                        sum_rewards[timestep-1, env_index] = reward
-                        sum_values[timestep-1, env_index] = value
-                        old_position = new_position.copy()
-
-                    if timestep >= (NUM_STEPS + 1):
-                        buffer.set_single_last_value(value)
-
-                    action = new_action
-                    logp = new_logp
-                    value = new_value
-                    observation = new_observation.copy()
                     timestep += 1                                          
 
                 # step simulation
@@ -193,28 +164,11 @@ class LocalRunnerTrain(Runner):
                 EnvironmentState(time, self._get_actor_states(env_descr, data, model))
             )
 
-        # do training    
-        print(f"\nAverage cumulative reward after {NUM_STEPS} steps: {np.mean(np.mean(sum_rewards, axis=0))}")
-        print(f"Average state value: {np.mean(np.mean(sum_values, axis=0))}")
-        sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
-        sum_values = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
-
-        self._controller.train(buffer)
-
         timestep = 0
-        buffer = Buffer(obs_dims, num_joints, self._num_agents)  
 
         logging.info("Finished batch.")
 
         return results
-
-    def _calculate_velocity(self, state1, state2):
-        """
-        Calculate the velocity for all agents at a timestep
-        """
-        old_d = math.sqrt(state1.x**2 + state1.y**2)
-        new_d = math.sqrt(state2.x**2 + state2.y**2)
-        return new_d-old_d
 
     @staticmethod
     def _make_mjcf(env_descr: Environment) -> str:

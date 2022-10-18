@@ -1,7 +1,7 @@
 import logging
 import argparse
 
-from optimizer import RLOptimizer 
+from optimizer import PPOOptimizer 
 from random import Random
 from config import NUM_PARALLEL_AGENT, SAMPLING_FREQUENCY, CONTROL_FREQUENCY, SIMULATION_TIME
 from revolve2.standard_resources.modular_robots import *
@@ -21,9 +21,6 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    LEARNING_INTERACTIONS = 5e6
-    #SIMULATION_TIME = int(LEARNING_INTERACTIONS / (CONTROL_FREQUENCY * POPULATION_SIZE))
-
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s",
@@ -35,9 +32,9 @@ async def main() -> None:
     rng = Random()
     rng.seed(42)
 
-    body = spider()
+    body = penguin()
 
-    optimizer = RLOptimizer(
+    optimizer = PPOOptimizer(
         rng=rng,
         sampling_frequency=SAMPLING_FREQUENCY,
         control_frequency=CONTROL_FREQUENCY,

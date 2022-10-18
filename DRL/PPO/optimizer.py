@@ -1,13 +1,13 @@
-import torch
 from runner_train_mujoco import LocalRunnerTrain
+import torch
 from random import Random
 from typing import List
 import csv
 
 import numpy as np
 import numpy.typing as npt
-from config import NUM_ITERATIONS, NUM_OBSERVATIONS
-from brain import RLbrain
+from config import ACTION_CONSTRAINT, NUM_ITERATIONS, NUM_OBSERVATIONS
+from brain import PPObrain
 from revolve2.core.modular_robot import Body
 from pyrr import Quaternion, Vector3
 
@@ -26,7 +26,7 @@ import sys
 import os
 
 
-class RLOptimizer():
+class PPOOptimizer():
 
     _runner: Runner
 
@@ -70,7 +70,7 @@ class RLOptimizer():
 
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
         action, value, logp = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, action)
+        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
         # controller.train() TODO
         return action.tolist(), value.item(), logp.item()
 
@@ -83,15 +83,19 @@ class RLOptimizer():
         """
 
         # prepare file to log statistics
-        if not os.path.exists('DRL/model_states'):
-            os.makedirs('DRL/model_states')
-        with open('DRL/model_states/statistics.csv', 'w', encoding='UTF8', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['mean_rew','mean_val'])
+        if not os.path.exists('ppo_model_states'):
+            os.makedirs('ppo_model_states')
+        
+        if not from_checkpoint:
+            with open('ppo_model_states/statistics.csv', 'w', encoding='UTF8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['mean_rew','mean_val'])
 
         # all parallel agents share the same brain
-        brain = RLbrain(from_checkpoint=from_checkpoint)
+        brain = PPObrain(from_checkpoint=from_checkpoint)
         self._controller = brain.make_controller(self._body, self._dof_ids)
+
+        restart_pos = None
 
         for _ in range(NUM_ITERATIONS):
 
@@ -113,7 +117,7 @@ class RLOptimizer():
                             [
                                 0.0,
                                 0.0,
-                                bounding_box.size.z / 2.0 - bounding_box.offset.z,
+                                bounding_box.size.z / 2.0,
                             ]
                         ),
                         Quaternion(),
@@ -123,6 +127,6 @@ class RLOptimizer():
                 batch.environments.append(env)
             
             # run the simulation
-            await self._runner.run_batch(batch, self._controller, self._num_agents)
+            restart_pos = await self._runner.run_batch(batch, self._controller, self._num_agents, restart_pos)
 
         return 

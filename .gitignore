@@ -2,5 +2,5 @@ __pycache__
 database
 notes.txt
 .vscode
-DRL/model_states/*
+ppo_model_states
 data

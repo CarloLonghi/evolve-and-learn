@@ -1,7 +1,7 @@
 import pandas as pd
 from matplotlib import pyplot as plt
 
-data = pd.read_csv('DRL/model_states/statistics.csv')
+data = pd.read_csv('ppo_model_states/statistics.csv')
 
 fig = plt.figure(figsize=(13, 7))
 ax = fig.add_subplot(1, 2, 1)

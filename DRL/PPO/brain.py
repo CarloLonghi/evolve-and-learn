@@ -10,12 +10,12 @@ import numpy.typing as npt
 
 from revolve2.actor_controller import ActorController
 from revolve2.core.modular_robot import ActiveHinge, Body, Brain
-from controller import RLcontroller
-from actor_critic_network import Actor, ActorCritic
+from controller import PPOcontroller
+from network import Actor, ActorCritic
 from config import NUM_OBS_TIMES
 
 
-class RLbrain(Brain, ABC):
+class PPObrain(Brain, ABC):
     """
     Brain of an agent
     """
@@ -31,7 +31,7 @@ class RLbrain(Brain, ABC):
         num_hinges = len(active_hinges)
         actor_critic = ActorCritic((len(dof_ids)*NUM_OBS_TIMES, 4,), num_hinges)
 
-        return RLcontroller(
+        return PPOcontroller(
             actor_critic,
             np.array([active_hinge.RANGE for active_hinge in active_hinges]),
             from_checkpoint=self._from_checkpoint,

@@ -193,7 +193,7 @@ class LocalRunnerTrain(Runner):
                     # TODO make all this configurable.
                     props = self._gym.get_actor_dof_properties(env, actor_handle)
                     props["driveMode"].fill(gymapi.DOF_MODE_POS)
-                    props["stiffness"].fill(1.0)
+                    props["stiffness"].fill(5.0)
                     props["damping"].fill(0.05)
                     self._gym.set_actor_dof_properties(env, actor_handle, props)
 
@@ -285,9 +285,9 @@ class LocalRunnerTrain(Runner):
                     new_logps = []
                     for i, control in enumerate(controls):
                         act, val, logp = self._batch.control(i, control_step, control, [obs[i,:] for obs in new_observations])
-                        new_actions.append(act.tolist())
-                        new_values.append(val.tolist())
-                        new_logps.append(logp.tolist())
+                        new_actions.append(act)
+                        new_values.append(val)
+                        new_logps.append(logp)
 
                     dof_targets = [
                         (env_index, actor_index, targets)
@@ -338,8 +338,8 @@ class LocalRunnerTrain(Runner):
 
                     buffer.set_last_value(values)
 
-                    print(f"\nAverage cumulative reward after {NUM_STEPS} steps: {np.mean(np.mean(sum_rewards, axis=0))}")
-                    print(f"Average state value: {np.mean(mean_values)}")
+                    logging.info(f"Average cumulative reward after {NUM_STEPS} steps: {np.mean(np.sum(sum_rewards, axis=0))}")
+                    logging.info(f"Average state value: {np.mean(mean_values)}")
                     sum_rewards = np.zeros((NUM_STEPS, self._num_agents))
                     mean_values = np.zeros(NUM_STEPS)
 

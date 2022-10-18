@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data.sampler import BatchSampler
 from torch.utils.data.sampler import SubsetRandomSampler
-from config import NUM_OBSERVATIONS, NUM_STEPS, BATCH_SIZE, NUM_OBS_TIMES, PPO_GAMMA, PPO_LAMBDA
+from config import NUM_OBSERVATIONS, NUM_STEPS, BATCH_SIZE, NUM_OBS_TIMES, GAMMA, PPO_LAMBDA
 
 class Buffer(object):
     """
@@ -15,11 +15,12 @@ class Buffer(object):
             self.observations.append(torch.zeros(NUM_STEPS, num_agents, dim))
 
         self.actions = torch.zeros(NUM_STEPS, num_agents, act_dim)
-        self.values = torch.zeros(NUM_STEPS + 1, num_agents)
+        self.values = torch.zeros(NUM_STEPS, num_agents)
         self.rewards = torch.zeros(NUM_STEPS, num_agents)
         self.logps = torch.zeros(NUM_STEPS, num_agents)
         self.advantages = torch.zeros(NUM_STEPS, num_agents)
         self.returns = torch.zeros(NUM_STEPS, num_agents)
+        self.last_state_value = torch.zeros(num_agents)
 
         self.num_agents = num_agents
         self.obs_dim = obs_dim
@@ -40,7 +41,7 @@ class Buffer(object):
         for i, observation in enumerate(obs):
             self.observations[i][self.step] = observation
         self.actions[self.step] = torch.tensor(act)
-        self.values[self.step] = torch.tensor(val)[:,0]
+        self.values[self.step] = torch.tensor(val)[:]
         self.rewards[self.step] = torch.tensor(rew)
         self.logps[self.step] = torch.tensor(logp)
 
@@ -67,28 +68,29 @@ class Buffer(object):
 
         self.step += 1
 
-    def set_last_value(self, next_state_value):
+    def set_last_value(self, last_state_value):
         """
         Insert the value of the last state reached
         """
-        self.values[-1] = next_state_value
+        self.last_state_value = torch.tensor(last_state_value)
 
-    def set_single_last_value(self, idx, next_state_value):
+    def set_single_last_value(self, idx, last_value):
         """
         Insert the value of the last state reached
         """
-        self.values[-1, idx] = next_state_value
+        self.last_state_value[idx] = last_value
 
     def _compute_advantages(self):
         """
         Compute the advantage function and the returns used to compute the loss
         """
         adv = 0
+        vals = torch.cat((self.values, self.last_state_value.unsqueeze(0)), dim=0)
         for t in range((NUM_STEPS -1), -1, -1):
-            delta = self.rewards[t] + PPO_GAMMA * self.values[t+1] - self.values[t]
-            adv = delta + (PPO_LAMBDA * PPO_GAMMA) * adv
+            delta = self.rewards[t] + GAMMA * vals[t+1] - vals[t]
+            adv = delta + (PPO_LAMBDA * GAMMA) * adv
             self.advantages[t] = adv
-            self.returns[t] = adv + self.values[t]
+            self.returns[t] = adv + vals[t]
 
     def _normalize_rewards(self):
         """

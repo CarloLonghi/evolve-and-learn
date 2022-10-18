@@ -7,11 +7,11 @@ from pyrr import Quaternion, Vector3
 from revolve2.actor_controller import ActorController
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.physics.running import ActorControl, Batch, Environment, PosedActor
-from runner import LocalRunner
+from runner_isaac import LocalRunner
 import torch
-from config import NUM_OBSERVATIONS
+from config import ACTION_CONSTRAINT, NUM_OBSERVATIONS
 
-from brain import RLbrain
+from brain import PPObrain
 from revolve2.core.modular_robot import Body
 from typing import List
 
@@ -33,7 +33,7 @@ class AgentRerunner:
 
         self._body = body
         self._actor, self._dof_ids = self._body.to_actor()
-        brain = RLbrain(from_checkpoint=True)
+        brain = PPObrain(from_checkpoint=True)
         self._controller = brain.make_controller(self._body, self._dof_ids)
 
         bounding_box = self._actor.calc_aabb()
@@ -53,7 +53,7 @@ class AgentRerunner:
 
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations) -> None:
         action, _, _ = self._controller.get_dof_targets(observations)
-        control.set_dof_targets(0, torch.clip(action, -0.8, 0.8))
+        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
 
 
 if __name__ == "__main__":
