@@ -43,12 +43,10 @@ from revolve2.actor_controller import ActorController
 
 
 
-class LocalRunnerTrain(Runner):
+class LocalRunner(Runner):
     """Runner for simulating using Mujoco."""
 
     _headless: bool
-    _controller: ActorController
-    _num_agents: int
 
     def __init__(self, headless: bool = False):
         """
@@ -58,7 +56,7 @@ class LocalRunnerTrain(Runner):
         """
         self._headless = headless
 
-    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int, initial_pos) -> BatchResults:
+    async def run_batch(self, batch: Batch) -> BatchResults:
         """
         Run the provided batch by simulating each contained environment.
 
@@ -66,16 +64,12 @@ class LocalRunnerTrain(Runner):
         :returns: List of simulation states in ascending order of time.
         """
         logging.info("Starting simulation batch with mujoco.")
-        self._controller = controller
-        self._num_agents = num_agents
 
         control_step = 1 / batch.control_frequency
 
         results = BatchResults([EnvironmentResults([]) for _ in batch.environments])
 
         num_joints =  len(batch.environments[0].actors[0].actor.joints)
-        sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
-        sum_values = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
 
         for env_index, env_descr in enumerate(batch.environments):
             logging.info(f"Environment {env_index}")
@@ -84,6 +78,9 @@ class LocalRunnerTrain(Runner):
 
             # TODO initial dof state
             data = mujoco.MjData(model)
+
+            model.jnt_stiffness = [1.0] * (num_joints + 1)
+            model.dof_damping = [0.05] * len(data.qvel)
 
             initial_targets = [
                 dof_state
@@ -132,7 +129,7 @@ class LocalRunnerTrain(Runner):
                     new_observation[0] = np.array(pos_sliding, dtype=np.float32)
                     new_observation[1] = np.array(orientation, dtype=np.float32)
                     
-                    new_action, new_value, new_logp = batch.control(env_index, control_step, control, new_observation)
+                    batch.control(env_index, control_step, control, new_observation)
                     actor_targets = control._dof_targets
                     actor_targets.sort(key=lambda t: t[0])
                     targets = [

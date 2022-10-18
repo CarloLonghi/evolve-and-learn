@@ -32,7 +32,7 @@ async def main() -> None:
     rng = Random()
     rng.seed(42)
 
-    body = penguin()
+    body = gecko()
 
     optimizer = PPOOptimizer(
         rng=rng,

@@ -1,11 +1,11 @@
 from rerunner import AgentRerunner
-from revolve2.standard_resources.modular_robots import gecko
+from revolve2.standard_resources.modular_robots import *
 
 
 async def main() -> None:
 
     rerunner = AgentRerunner()
-    body = gecko()
+    body = zappa()
     await rerunner.rerun(body)
 
 

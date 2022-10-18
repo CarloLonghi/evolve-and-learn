@@ -7,9 +7,9 @@ from pyrr import Quaternion, Vector3
 from revolve2.actor_controller import ActorController
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.physics.running import ActorControl, Batch, Environment, PosedActor
-from runner_isaac import LocalRunner
+from runner_mujoco import LocalRunner
 import torch
-from config import ACTION_CONSTRAINT, NUM_OBSERVATIONS
+from config import ACTION_CONSTRAINT, CONTROL_FREQUENCY, NUM_OBSERVATIONS, SAMPLING_FREQUENCY, SIMULATION_TIME
 
 from brain import PPObrain
 from revolve2.core.modular_robot import Body
@@ -25,9 +25,9 @@ class AgentRerunner:
 
     async def rerun(self, body: Body) -> None:
         batch = Batch(
-            simulation_time=32,
-            sampling_frequency=4,
-            control_frequency=4,
+            simulation_time=SIMULATION_TIME,
+            sampling_frequency=SAMPLING_FREQUENCY,
+            control_frequency=CONTROL_FREQUENCY,
             control=self._control,
         )
 
@@ -48,11 +48,11 @@ class AgentRerunner:
         )
         batch.environments.append(env)
 
-        runner = LocalRunner(LocalRunner.SimParams())
-        await runner.run_batch(batch)
+        runner = LocalRunner()
+        await runner.run_batch(batch, )
 
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations) -> None:
-        action, _, _ = self._controller.get_dof_targets(observations)
+        action, _, _ = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
         control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
 
 

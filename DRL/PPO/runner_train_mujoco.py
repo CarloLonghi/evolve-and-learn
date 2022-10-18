@@ -85,11 +85,12 @@ class LocalRunnerTrain(Runner):
             logging.info(f"Environment {env_index}")
 
             model = mujoco.MjModel.from_xml_string(self._make_mjcf(env_descr))
-            model.jnt_stiffness = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, ]
-            model.dof_damping = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, ]
 
             # TODO initial dof state
             data = mujoco.MjData(model)
+
+            model.jnt_stiffness = [1.0] * (num_joints + 1)
+            model.dof_damping = [0.05] * len(data.qvel)
 
             initial_targets = [
                 dof_state
