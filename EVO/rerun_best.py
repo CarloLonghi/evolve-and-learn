@@ -2,14 +2,12 @@
 
 import math
 
+from revde_optimizer import DbRevDEOptimizerIndividual
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.modular_robot.brains import (
-    BrainCpgNetworkStatic,
-    make_cpg_network_structure_neighbour,
-)
-from revde_optimizer import DbRevDEOptimizerIndividual
+    BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from revolve2.runners.mujoco import ModularRobotRerunner
 from revolve2.standard_resources.modular_robots import gecko
 from sqlalchemy.ext.asyncio.session import AsyncSession

@@ -1,26 +1,26 @@
 
 import logging
-from mimetypes import init
 import pickle
 from abc import ABC, abstractmethod
+from mimetypes import init
 from random import Random
-from typing import Optional, List
+from typing import List, Optional
 
 import numpy as np
 import numpy.typing as npt
 import sqlalchemy
-from revolve2.core.database import IncompatibleError
-from revolve2.core.database.serializers import DbNdarray1xn, Ndarray1xnSerializer, FloatSerializer
-from revolve2.core.optimization import Process, ProcessIdGen
-
 from revolve2.actor_controllers.cpg import CpgNetworkStructure
-
+from revolve2.core.database import IncompatibleError
+from revolve2.core.database.serializers import (DbNdarray1xn, FloatSerializer,
+                                                Ndarray1xnSerializer)
+from revolve2.core.optimization import Process, ProcessIdGen
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.future import select
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
+
 
 class RevDEOptimizer(ABC, Process):
     """
@@ -108,7 +108,7 @@ class RevDEOptimizer(ABC, Process):
         self.__population_size = population_size
         self.__latest_population = initial_population
 
-        self.__gen_num = 1
+        self.__gen_num = 0
 
         self.__scaling = scaling
         self.__cross_prob = cross_prob
@@ -256,8 +256,7 @@ class RevDEOptimizer(ABC, Process):
 
     async def run(self) -> None:
         """Run the optimizer."""
-        if self.generation_number == 1:
-            logging.info(f"Evaluating initial population")
+        if self.generation_number == 0:
             fitnesses = await self._evaluate_population(
                 self.__database,
                 self.__process_id_gen.gen(),
@@ -266,7 +265,80 @@ class RevDEOptimizer(ABC, Process):
             )
             assert fitnesses.shape == (len(self.__latest_population),)
             self.__latest_fitnesses = fitnesses
-            logging.info(f"Finished evaluating initial population")
+            
+            async with AsyncSession(self.__database) as session:
+                async with session.begin():
+
+                    # save current optimizer state
+                    session.add(
+                        DbRevDEOptimizerState(
+                            process_id=self.__process_id,
+                            gen_num=self.__gen_num,
+                            rng=pickle.dumps(self.__rng.getstate()),
+                        )
+                    )
+
+                    # save new individuals
+                    db_individual_ids = []
+                    for ind in self.__latest_population:
+                        id = await Ndarray1xnSerializer.to_database(
+                            session, [ind]
+                        )
+                        db_individual_ids += id
+                    assert len(db_individual_ids) == len(self.__latest_population)
+
+                    session.add_all(
+                        [
+                            DbRevDEOptimizerIndividual(
+                                process_id=self.__process_id,
+                                gen_num=self.__gen_num,
+                                gen_index=index,
+                                individual=id,
+                                fitness=fitness,
+                            )
+                        for index, id, fitness in zip(
+                            range(len(self.__latest_population)), db_individual_ids, self.__latest_fitnesses
+                        )
+                        ]
+                    )
+
+                    # save current generation for revovery
+                    db_generation_ids = []
+                    for ind in self.__latest_population:
+                        id = await Ndarray1xnSerializer.to_database(
+                            session, [ind]
+                        )
+                        db_generation_ids += id
+                    assert len(db_generation_ids) == len(self.__latest_population)
+
+                    session.add_all(
+                        [
+                            DbRevDEOptimizerBestIndividual(
+                                process_id=self.__process_id,
+                                gen_num=self.__gen_num,
+                                gen_index=index,
+                                individual=id,
+                                fitness=fitness,
+                            )
+                        for index, id, fitness in zip(
+                            range(len(self.__latest_population)), db_generation_ids, self.__latest_fitnesses
+                        )
+                        ]
+                    )
+
+                    session.add_all(
+                        [
+                            DbRevDEOptimizerGeneration(
+                                process_id=self.__process_id,
+                                gen_num=self.__gen_num,
+                                gen_index=index,
+                                individual_id=individual_id,
+                            )
+                            for index, individual_id in enumerate(db_generation_ids)
+                        ]
+                    )
+                    logging.info(f"Finished generation {self.__gen_num}")
+                    self.__gen_num += 1
 
         while self.__safe_must_do_next_gen():
             rng = np.random.Generator(
@@ -299,9 +371,6 @@ class RevDEOptimizer(ABC, Process):
                             rng=pickle.dumps(self.__rng.getstate()),
                         )
                     )
-
-                    if self.generation_number == 1:
-                        candidates = full_candidates
 
                     # save new individuals
                     db_individual_ids = []

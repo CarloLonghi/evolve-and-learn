@@ -1,16 +1,10 @@
-"""
-Plot average, min, and max fitness over generations, using the results of the evolutionary optimizer.
-
-Assumes fitness is a float and database is files.
-See program help for what inputs to provide.
-"""
-
 import argparse
 
 import matplotlib.pyplot as plt
 import pandas
+from revde_optimizer import (DbRevDEOptimizerBestIndividual,
+                             DbRevDEOptimizerIndividual)
 from revolve2.core.database import open_database_sqlite
-from revde_optimizer import DbRevDEOptimizerIndividual, DbRevDEOptimizerBestIndividual
 from sqlalchemy.future import select
 
 
