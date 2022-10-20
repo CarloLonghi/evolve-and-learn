@@ -5,7 +5,7 @@ from revolve2.standard_resources.modular_robots import *
 async def main() -> None:
 
     rerunner = AgentRerunner()
-    body = zappa()
+    body = gecko()
     await rerunner.rerun(body)
 
 

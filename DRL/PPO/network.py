@@ -1,8 +1,10 @@
-from turtle import forward
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
-from typing import List
+
 
 class Actor(nn.Module):
     def __init__(self, obs_dim: int, act_dim: int):
@@ -15,6 +17,8 @@ class Actor(nn.Module):
         super().__init__()
         self.pi_encoder = ObservationEncoder(obs_dim=obs_dim)
         self.mean_layer = nn.Linear(32, act_dim)
+        nn.init.orthogonal_(self.mean_layer.weight, 0.01)
+        nn.init.constant_(self.mean_layer.bias, 0)
         self.std_layer = nn.Parameter(torch.zeros(act_dim))
 
     def forward(self, obs):
@@ -34,6 +38,8 @@ class Critic(nn.Module):
         super().__init__()
         self.val_encoder = ObservationEncoder(obs_dim=obs_dim)
         self.critic_layer = nn.Linear(32,1)
+        nn.init.orthogonal_(self.critic_layer.weight, 1.0)
+        nn.init.constant_(self.critic_layer.bias, 0)
 
     def forward(self, obs):
         val_obs = self.val_encoder(obs)
@@ -72,7 +78,10 @@ class SingleObservationEncoder(nn.Module):
         
         self.encoder = nn.Sequential()
         for n, (dim_in, dim_out) in enumerate(zip(dims[:-1], dims[1:])):
-            self.encoder.add_module(name=f"single_observation_encoder_{n}", module=nn.Linear(in_features=dim_in, out_features=dim_out))
+            layer = nn.Linear(in_features=dim_in, out_features=dim_out)
+            nn.init.orthogonal_(layer.weight, np.sqrt(2))
+            nn.init.constant_(layer.bias, 0)
+            self.encoder.add_module(name=f"single_observation_encoder_{n}", module=layer)
             self.encoder.add_module(name=f'tanh_{n}', module=nn.Tanh())
 
     def forward(self, obs):
@@ -95,7 +104,10 @@ class ObservationEncoder(nn.Module):
         
         self.final_encoder = nn.Sequential()
         for n, (dim_in, dim_out) in enumerate(zip(dims[:-1], dims[1:])):
-            self.final_encoder.add_module(name=f"final_observation_encoder_{n}", module=nn.Linear(in_features=dim_in, out_features=dim_out))
+            layer = nn.Linear(in_features=dim_in, out_features=dim_out)
+            nn.init.orthogonal_(layer.weight, np.sqrt(2))
+            nn.init.constant_(layer.bias, 0)            
+            self.final_encoder.add_module(name=f"final_observation_encoder_{n}", module=layer)
             self.final_encoder.add_module(name=f'tanh_{n}', module=nn.Tanh())
 
     def forward(self, observations):

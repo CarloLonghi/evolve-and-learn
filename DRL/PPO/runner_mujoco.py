@@ -5,8 +5,8 @@ from typing import List
 import mujoco
 import mujoco_viewer
 import numpy as np
-
-from config import NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT, NUM_STEPS
+from config import (NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT,
+                    NUM_STEPS)
 from interaction_buffer import Buffer
 
 try:
@@ -28,19 +28,12 @@ except Exception as e:
     pass
 
 from pyrr import Quaternion, Vector3
-from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
-from revolve2.core.physics.running import (
-    ActorControl,
-    ActorState,
-    Batch,
-    BatchResults,
-    Environment,
-    EnvironmentResults,
-    EnvironmentState,
-    Runner,
-)
 from revolve2.actor_controller import ActorController
-
+from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
+from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+                                           BatchResults, Environment,
+                                           EnvironmentResults,
+                                           EnvironmentState, Runner)
 
 
 class LocalRunner(Runner):
@@ -160,8 +153,6 @@ class LocalRunner(Runner):
             results.environment_results[env_index].environment_states.append(
                 EnvironmentState(time, self._get_actor_states(env_descr, data, model))
             )
-
-        timestep = 0
 
         logging.info("Finished batch.")
 

@@ -8,24 +8,18 @@ from typing import List, Optional
 
 import colored
 import numpy as np
-from isaacgym import gymapi
 import torch
+from config import (NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT,
+                    NUM_STEPS)
+from interaction_buffer import Buffer
+from isaacgym import gymapi
 from pyrr import Quaternion, Vector3
+from revolve2.actor_controller import ActorController
 from revolve2.core.physics.actor import Actor
 from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
-from revolve2.core.physics.running import (
-    ActorControl,
-    ActorState,
-    Batch,
-    BatchResults,
-    EnvironmentResults,
-    EnvironmentState,
-    Runner,
-)
-from revolve2.actor_controller import ActorController
-
-from interaction_buffer import Buffer
-from config import NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT, NUM_STEPS
+from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+                                           BatchResults, EnvironmentResults,
+                                           EnvironmentState, Runner)
 
 
 class LocalRunnerTrain(Runner):

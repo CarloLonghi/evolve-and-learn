@@ -1,29 +1,33 @@
 from __future__ import annotations
-from asyncore import write
+
 import csv
 import logging
-
+from asyncore import write
 from typing import List
+from isort import file
 
 import numpy as np
 import numpy.typing as npt
 import torch
-from torch.optim import Adam
-
-from revolve2.actor_controller import ActorController
-from revolve2.serialization import SerializeError, StaticData
-
+from config import (ACTION_CONSTRAINT, ACTOR_LOSS_COEFF, CRITIC_LOSS_COEFF,
+                    ENTROPY_COEFF, LR_ACTOR, LR_CRITIC, N_EPOCHS,
+                    NUM_ITERATIONS, PPO_CLIP_EPS)
 from interaction_buffer import Buffer
 from network import Actor, ActorCritic, Critic, ObservationEncoder
-from config import LR_ACTOR, LR_CRITIC, PPO_CLIP_EPS, NUM_ITERATIONS, LR_ACTOR, LR_CRITIC, N_EPOCHS, CRITIC_LOSS_COEFF, ENTROPY_COEFF, ACTOR_LOSS_COEFF, ACTION_CONSTRAINT
+from revolve2.actor_controller import ActorController
+from revolve2.serialization import SerializeError, StaticData
+from torch.optim import Adam
+
 
 class PPOcontroller(ActorController):
     _num_input_neurons: int
     _num_output_neurons: int
     _dof_ranges: npt.NDArray[np.float_]
+    _file_path: str
 
     def __init__(
         self,
+        file_path: str,
         actor_critic: Actor,
         dof_ranges: npt.NDArray[np.float_],
         from_checkpoint: bool = False,
@@ -49,6 +53,7 @@ class PPOcontroller(ActorController):
             self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state'])
             self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state'])
         self._dof_ranges = dof_ranges
+        self._file_path = file_path
 
     def get_dof_targets(self, observation) -> List[float]:
         """
@@ -94,7 +99,7 @@ class PPOcontroller(ActorController):
                 ratio = torch.exp(logp - logp_old)
                 obj1 = ratio * adv
                 obj2 = torch.clamp(ratio, 1.0 - PPO_CLIP_EPS, 1.0 + PPO_CLIP_EPS) * adv # ratio clipping
-                print(f"Percentage of clipped ratios: {int((abs(ratio) - 1 > PPO_CLIP_EPS).sum() / ratio.shape[0] * 100)}%")
+                #print(f"Percentage of clipped ratios: {int((abs(ratio) - 1 > PPO_CLIP_EPS).sum() / ratio.shape[0] * 100)}%")
                 ppo_loss = -torch.min(obj1, obj2).mean() # policy loss
 
                 self.actor_optimizer.zero_grad()
@@ -107,6 +112,10 @@ class PPOcontroller(ActorController):
                 ppo_losses.append(ppo_loss.item())
                 val_losses.append(val_loss.item())
 
+                torch.nn.utils.clip_grad_norm_(
+                    self._actor_critic.parameters(), 0.5
+                )
+
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
 
@@ -118,12 +127,12 @@ class PPOcontroller(ActorController):
             'actor_optimizer_state': self.actor_optimizer.state_dict(),
             'critic_optimizer_state': self.critic_optimizer.state_dict(),
         }
-        torch.save(state, "ppo_model_states/last_checkpoint")
+        torch.save(state, self._file_path + "/last_checkpoint")
 
         # log statistics
         mean_rew = torch.mean(torch.mean(buffer.rewards, axis=0)).item()
         mean_val = torch.mean(torch.mean(buffer.values, axis=0)).item()
-        with open('ppo_model_states/statistics.csv', 'a', encoding='UTF8', newline='') as f:
+        with open(self._file_path + '/statistics.csv', 'a', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([mean_rew, mean_val])
 

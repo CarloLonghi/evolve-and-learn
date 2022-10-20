@@ -1,19 +1,15 @@
-"""
-Rerun(watch) a modular robot in isaac gym.
-"""
-
-from pyrr import Quaternion, Vector3
-
-from revolve2.actor_controller import ActorController
-from revolve2.core.modular_robot import ModularRobot
-from revolve2.core.physics.running import ActorControl, Batch, Environment, PosedActor
-from runner_mujoco import LocalRunner
-import torch
-from config import ACTION_CONSTRAINT, CONTROL_FREQUENCY, NUM_OBSERVATIONS, SAMPLING_FREQUENCY, SIMULATION_TIME
-
-from brain import PPObrain
-from revolve2.core.modular_robot import Body
 from typing import List
+
+import torch
+from brain import PPObrain
+from config import (ACTION_CONSTRAINT, CONTROL_FREQUENCY, NUM_OBSERVATIONS,
+                    SAMPLING_FREQUENCY, SIMULATION_TIME)
+from pyrr import Quaternion, Vector3
+from revolve2.actor_controller import ActorController
+from revolve2.core.modular_robot import Body, ModularRobot
+from revolve2.core.physics.running import (ActorControl, Batch, Environment,
+                                           PosedActor)
+from runner_mujoco import LocalRunner
 
 
 class AgentRerunner:

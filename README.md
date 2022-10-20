@@ -6,6 +6,7 @@ To run experiments for DRL-PPO:
 3. Add --from_checkpoint to restart from the last optimization checkpoint
 
 To plot rewards and state values run python DRL/PPO/plot_statistics.py
+To plot the fitness of the agents run python DRL/PPO/plot_fitness.py
 
 To see the last optimized controller run python DRL/PPO/rerun_best.py
 

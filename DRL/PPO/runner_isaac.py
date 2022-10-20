@@ -8,22 +8,15 @@ from typing import List, Optional
 
 import colored
 import numpy as np
+import torch
+from config import NUM_OBS_TIMES, NUM_OBSERVATIONS
 from isaacgym import gymapi
 from pyrr import Quaternion, Vector3
 from revolve2.core.physics.actor import Actor
 from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
-from revolve2.core.physics.running import (
-    ActorControl,
-    ActorState,
-    Batch,
-    BatchResults,
-    EnvironmentResults,
-    EnvironmentState,
-    Runner,
-)
-import torch
-
-from config import NUM_OBS_TIMES, NUM_OBSERVATIONS
+from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+                                           BatchResults, EnvironmentResults,
+                                           EnvironmentState, Runner)
 
 
 class LocalRunner(Runner):

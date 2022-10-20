@@ -1,7 +1,8 @@
 import torch
-from torch.utils.data.sampler import BatchSampler
-from torch.utils.data.sampler import SubsetRandomSampler
-from config import NUM_OBSERVATIONS, NUM_STEPS, BATCH_SIZE, NUM_OBS_TIMES, GAMMA, PPO_LAMBDA
+from config import (BATCH_SIZE, GAMMA, NUM_OBS_TIMES, NUM_OBSERVATIONS,
+                    NUM_STEPS, PPO_LAMBDA)
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+
 
 class Buffer(object):
     """

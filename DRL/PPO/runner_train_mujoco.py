@@ -5,8 +5,8 @@ from typing import List
 import mujoco
 import mujoco_viewer
 import numpy as np
-
-from config import ACTION_CONSTRAINT, NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT, NUM_STEPS
+from config import (ACTION_CONSTRAINT, NUM_OBS_TIMES, NUM_OBSERVATIONS,
+                    NUM_PARALLEL_AGENT, NUM_STEPS)
 from interaction_buffer import Buffer
 
 try:
@@ -28,19 +28,12 @@ except Exception as e:
     pass
 
 from pyrr import Quaternion, Vector3
-from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
-from revolve2.core.physics.running import (
-    ActorControl,
-    ActorState,
-    Batch,
-    BatchResults,
-    Environment,
-    EnvironmentResults,
-    EnvironmentState,
-    Runner,
-)
 from revolve2.actor_controller import ActorController
-
+from revolve2.core.physics.actor.urdf import to_urdf as physbot_to_urdf
+from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+                                           BatchResults, Environment,
+                                           EnvironmentResults,
+                                           EnvironmentState, Runner)
 
 
 class LocalRunnerTrain(Runner):
@@ -49,6 +42,11 @@ class LocalRunnerTrain(Runner):
     _headless: bool
     _controller: ActorController
     _num_agents: int
+    _obs_mean: List[float]
+    _obs_m2: List[float]
+    _rew_mean: float
+    _rew_m2: float
+
 
     def __init__(self, headless: bool = False):
         """
@@ -58,7 +56,7 @@ class LocalRunnerTrain(Runner):
         """
         self._headless = headless
 
-    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int, initial_pos) -> BatchResults:
+    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int) -> BatchResults:
         """
         Run the provided batch by simulating each contained environment.
 
@@ -68,18 +66,20 @@ class LocalRunnerTrain(Runner):
         logging.info("Starting simulation batch with mujoco.")
         self._controller = controller
         self._num_agents = num_agents
+        self._obs_mean = [0,] * NUM_OBSERVATIONS
+        self._obs_m2 = [0,] * NUM_OBSERVATIONS
+        self._rew_mean = 0
+        self._rew_m2 = 0
 
         control_step = 1 / batch.control_frequency
 
         results = BatchResults([EnvironmentResults([]) for _ in batch.environments])
 
         num_joints =  len(batch.environments[0].actors[0].actor.joints)
-        obs_dims = (num_joints*NUM_OBS_TIMES, 4)
+        obs_dims = (num_joints*NUM_OBS_TIMES, 4, num_joints)
         buffer = Buffer(obs_dims, num_joints, self._num_agents)
         sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
         sum_values = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
-
-        restart_pos = []
 
         for env_index, env_descr in enumerate(batch.environments):
             logging.info(f"Environment {env_index}")
@@ -97,8 +97,7 @@ class LocalRunnerTrain(Runner):
                 for posed_actor in env_descr.actors
                 for dof_state in posed_actor.dof_states
             ]
-            if initial_pos is not None:
-                initial_targets = initial_pos[env_index]
+            #initial_targets = np.random.uniform(low=-ACTION_CONSTRAINT, high=ACTION_CONSTRAINT, size=len(initial_targets))
 
             self._set_dof_targets(data, initial_targets)
 
@@ -140,9 +139,14 @@ class LocalRunnerTrain(Runner):
                     hinges_pos = np.array(data.qpos[-num_joints:])
                     orientation = np.array(self._get_actor_state(0, data, model).orientation)
                     pos_sliding = np.concatenate((hinges_pos, pos_sliding.squeeze()[:num_joints*(NUM_OBS_TIMES - 1)]))
+                    velocities = np.array(data.qvel[-num_joints:])
                     
                     new_observation[0] = np.array(pos_sliding, dtype=np.float32)
                     new_observation[1] = np.array(orientation, dtype=np.float32)
+                    new_observation[2] = np.array(velocities, dtype=np.float32)
+                    
+                    #self._update_obs_stats(new_observation, timestep)
+                    #new_observation = self._normalize_observation(new_observation, timestep)
                     
                     new_action, new_value, new_logp = batch.control(env_index, control_step, control, new_observation)
                     actor_targets = control._dof_targets
@@ -152,8 +156,6 @@ class LocalRunnerTrain(Runner):
                         for actor_target in actor_targets
                         for target in actor_target[1]
                     ]
-                    #if timestep % 128 == 0:
-                    #    targets == np.random.uniform(low=-ACTION_CONSTRAINT, high=ACTION_CONSTRAINT, size=len(targets))
                     
                     if timestep < NUM_STEPS:
                         self._set_dof_targets(data, targets)
@@ -163,7 +165,9 @@ class LocalRunnerTrain(Runner):
                         new_position = results.environment_results[env_index].environment_states[-1].actor_states[0].position
                         
                         # compute the rewards from the new and old positions of the agents
-                        reward = self._calculate_velocity(old_position, new_position)                       
+                        reward = self._calculate_velocity(old_position, new_position)
+                        #self._update_rew_stats(reward, timestep)
+                        #reward = self._normalize_reward(reward, timestep)           
 
                         # insert data of the current state in the replay buffer
                         buffer.insert_single(
@@ -194,8 +198,6 @@ class LocalRunnerTrain(Runner):
                 if not self._headless:
                     viewer.render()
 
-            restart_pos.append(hinges_pos)
-
             if not self._headless:
                 viewer.close()
 
@@ -217,7 +219,7 @@ class LocalRunnerTrain(Runner):
 
         logging.info("Finished batch.")
 
-        return restart_pos
+        return results
 
     def _calculate_velocity(self, state1, state2):
         """
@@ -226,6 +228,45 @@ class LocalRunnerTrain(Runner):
         old_d = math.sqrt(state1.x**2 + state1.y**2)
         new_d = math.sqrt(state2.x**2 + state2.y**2)
         return new_d-old_d
+
+    def _update_obs_stats(self, new_obs, step_num):
+        """
+        """
+        for i, obs in enumerate(new_obs):
+            delta = obs.mean() - self._obs_mean[i]
+            self._obs_mean[i] += delta / (step_num + 1)
+            delta_2 = obs.mean() - self._obs_mean[i]
+            self._obs_m2[i] += delta * delta_2
+
+    def _reset_mean_m2(self):
+        self._obs_mean = [0,] * NUM_OBSERVATIONS
+        self._obs_m2 = [0,] * NUM_OBSERVATIONS
+        self._rew_mean = 0
+        self._rew_m2 = 0
+
+    def _normalize_observation(self, observation, step_num):
+        if step_num < 2: 
+            return observation
+        else:
+            for i, obs in enumerate(observation):
+                obs -= self._obs_mean[i]
+                obs /= self._obs_m2[i] / step_num
+            return observation
+
+    def _update_rew_stats(self, new_rew, step_num):
+        """
+        """
+        delta = new_rew - self._rew_mean
+        self._rew_mean += delta / (step_num + 1)
+        delta_2 = new_rew - self._rew_mean
+        self._rew_m2 += delta * delta_2
+
+    def _normalize_reward(self, reward, step_num):
+        if step_num < 2: 
+            return reward
+        else:
+            reward /= self._rew_m2 / step_num
+            return reward
 
     @staticmethod
     def _make_mjcf(env_descr: Environment) -> str:
