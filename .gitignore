@@ -6,3 +6,4 @@ ppo_model_states
 data
 .venv
 .idea
+test

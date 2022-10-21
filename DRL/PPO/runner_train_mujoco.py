@@ -97,7 +97,6 @@ class LocalRunnerTrain(Runner):
                 for posed_actor in env_descr.actors
                 for dof_state in posed_actor.dof_states
             ]
-            #initial_targets = np.random.uniform(low=-ACTION_CONSTRAINT, high=ACTION_CONSTRAINT, size=len(initial_targets))
 
             self._set_dof_targets(data, initial_targets)
 

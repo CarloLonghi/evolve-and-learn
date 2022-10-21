@@ -19,7 +19,7 @@ class AgentRerunner:
     _dof_ids: List[int]
     _actor: ActorController
 
-    async def rerun(self, body: Body) -> None:
+    async def rerun(self, body: Body, file_path) -> None:
         batch = Batch(
             simulation_time=SIMULATION_TIME,
             sampling_frequency=SAMPLING_FREQUENCY,
@@ -30,7 +30,7 @@ class AgentRerunner:
         self._body = body
         self._actor, self._dof_ids = self._body.to_actor()
         brain = PPObrain(from_checkpoint=True)
-        self._controller = brain.make_controller(self._body, self._dof_ids)
+        self._controller = brain.make_controller(self._body, self._dof_ids, file_path)
 
         bounding_box = self._actor.calc_aabb()
         env = Environment()

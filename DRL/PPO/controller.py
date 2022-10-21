@@ -4,7 +4,6 @@ import csv
 import logging
 from asyncore import write
 from typing import List
-from isort import file
 
 import numpy as np
 import numpy.typing as npt
@@ -47,7 +46,7 @@ class PPOcontroller(ActorController):
         self.critic_optimizer = Adam(critic_params, lr=LR_CRITIC)
         #self.optimizer = Adam([p for p in self._actor_critic.parameters() if p.requires_grad])
         if from_checkpoint:
-            checkpoint = torch.load("ppo_model_states/last_checkpoint")
+            checkpoint = torch.load(self._file_path + "/last_checkpoint")
             self._iteration_num = checkpoint['iteration']
             self._actor_critic.load_state_dict(checkpoint['model_state'])
             self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state'])

@@ -79,9 +79,6 @@ class PPOOptimizer():
         """
 
         # prepare file to log statistics
-        if not os.path.exists('ppo_model_states'):
-            os.makedirs('ppo_model_states')
-
         if not from_checkpoint:
             with open(self._file_path + '/statistics.csv', 'w', encoding='UTF8', newline='') as f:
                 writer = csv.writer(f)
