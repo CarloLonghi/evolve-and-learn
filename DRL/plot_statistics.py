@@ -5,14 +5,13 @@ import argparse
 
 def plot(database: str):
     data = pd.read_csv(database + '/statistics.csv')
+    num_stats = len(data.columns)
 
     fig = plt.figure(figsize=(13, 7))
-    ax = fig.add_subplot(1, 2, 1)
-    ax.title.set_text("Mean reward for each action")
-    plt.plot(data['mean_rew'])
-    ax = fig.add_subplot(1, 2, 2)
-    ax.title.set_text("Mean value for each state")
-    plt.plot(data['mean_val'])
+    for i, stat in enumerate(data.columns):
+        ax = fig.add_subplot(1, num_stats, i+1)
+        ax.title.set_text(stat)
+        plt.plot(data[stat])
     plt.show()
 
 def main() -> None:
