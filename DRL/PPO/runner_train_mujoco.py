@@ -76,7 +76,7 @@ class LocalRunnerTrain(Runner):
         results = BatchResults([EnvironmentResults([]) for _ in batch.environments])
 
         num_joints =  len(batch.environments[0].actors[0].actor.joints)
-        obs_dims = (num_joints*NUM_OBS_TIMES, 4, num_joints)
+        obs_dims = (num_joints*NUM_OBS_TIMES, 4,)
         buffer = Buffer(obs_dims, num_joints, self._num_agents)
         sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
         sum_values = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
@@ -138,11 +138,11 @@ class LocalRunnerTrain(Runner):
                     hinges_pos = np.array(data.qpos[-num_joints:])
                     orientation = np.array(self._get_actor_state(0, data, model).orientation)
                     pos_sliding = np.concatenate((hinges_pos, pos_sliding.squeeze()[:num_joints*(NUM_OBS_TIMES - 1)]))
-                    velocities = np.array(data.qvel[-num_joints:])
+                    #velocities = np.array(data.qvel[-num_joints:])
                     
                     new_observation[0] = np.array(pos_sliding, dtype=np.float32)
                     new_observation[1] = np.array(orientation, dtype=np.float32)
-                    new_observation[2] = np.array(velocities, dtype=np.float32)
+                    #new_observation[2] = np.array(velocities, dtype=np.float32)
                     
                     #self._update_obs_stats(new_observation, timestep)
                     #new_observation = self._normalize_observation(new_observation, timestep)

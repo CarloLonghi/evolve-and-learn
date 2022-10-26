@@ -45,6 +45,7 @@ class PPOcontroller(ActorController):
         self.actor_optimizer = Adam(actor_params, lr=LR_ACTOR)
         self.critic_optimizer = Adam(critic_params, lr=LR_CRITIC)
         #self.optimizer = Adam([p for p in self._actor_critic.parameters() if p.requires_grad])
+        self._file_path = file_path
         if from_checkpoint:
             checkpoint = torch.load(self._file_path + "/last_checkpoint")
             self._iteration_num = checkpoint['iteration']
@@ -52,7 +53,6 @@ class PPOcontroller(ActorController):
             self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state'])
             self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state'])
         self._dof_ranges = dof_ranges
-        self._file_path = file_path
 
     def get_dof_targets(self, observation) -> List[float]:
         """

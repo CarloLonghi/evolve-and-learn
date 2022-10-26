@@ -28,7 +28,7 @@ class PPObrain(Brain, ABC):
         """
         active_hinges = body.find_active_hinges()
         num_hinges = len(active_hinges)
-        actor_critic = ActorCritic((len(dof_ids)*NUM_OBS_TIMES, 4, num_hinges), num_hinges)
+        actor_critic = ActorCritic((len(dof_ids)*NUM_OBS_TIMES, 4,), num_hinges)
 
         return PPOcontroller(
             file_path,

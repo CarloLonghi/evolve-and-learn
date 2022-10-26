@@ -7,7 +7,7 @@ def plot(database: str):
     data = pd.read_csv(database + '/statistics.csv')
     num_stats = len(data.columns)
 
-    fig = plt.figure(figsize=(13, 7))
+    fig = plt.figure(figsize=(7*num_stats, 6))
     for i, stat in enumerate(data.columns):
         ax = fig.add_subplot(1, num_stats, i+1)
         ax.title.set_text(stat)

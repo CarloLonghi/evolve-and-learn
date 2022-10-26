@@ -134,10 +134,6 @@ class LocalRunner(Runner):
                     if timestep < NUM_STEPS:
                         self._set_dof_targets(data, targets)
 
-                    if timestep > 0:
-                        # get the new positions of each agent
-                        new_position = results.environment_results[env_index].environment_states[-1].actor_states[0].position
-                        
                     timestep += 1                                          
 
                 # step simulation
