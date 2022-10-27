@@ -3,7 +3,8 @@ database
 notes.txt
 .vscode
 ppo_model_states
-data
+*data
 .venv
 .idea
 test
+experiments.sh

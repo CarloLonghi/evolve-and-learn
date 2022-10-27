@@ -16,7 +16,7 @@ from revolve2.core.optimization import ProcessIdGen
 from revolve2.core.physics.actor import Actor
 from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
                                            Environment, PosedActor, Runner)
-from revolve2.runners.mujoco import LocalRunner
+from runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
