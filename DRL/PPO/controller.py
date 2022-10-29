@@ -60,6 +60,7 @@ class PPOcontroller(ActorController):
         """
         action_prob, value, _, _ = self._actor_critic(observation)
         action = action_prob.sample()
+        action = torch.clip(action, -0.8, 0.8)
         logp = action_prob.log_prob(action).sum(-1)
         return action, value, logp
     

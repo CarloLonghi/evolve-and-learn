@@ -36,7 +36,7 @@ async def main() -> None:
     body = args.body
     num = args.num
 
-    file_path = "./data/PPO/"+body+"/database"+num
+    file_path = "./test/PPO/"+body+"/database"+num
     os.makedirs(file_path, exist_ok=True)
 
     fileh = logging.FileHandler(file_path+"/exp.log", mode='w')

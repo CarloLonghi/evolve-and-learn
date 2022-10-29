@@ -4,6 +4,7 @@ import os
 import sys
 from random import Random
 from typing import List
+import numpy as np
 
 import sqlalchemy
 import torch
@@ -66,7 +67,10 @@ class PPOOptimizer():
 
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
         action, value, logp = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
+        action_l = action.tolist()
+        pos = observations[0][:6].tolist()
+        new_pos = torch.tensor([sum(x) for x in zip(action_l, pos)])
+        control.set_dof_targets(0, torch.clip(new_pos, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
         # controller.train() TODO
         return action.tolist(), value.item(), logp.item()
 
