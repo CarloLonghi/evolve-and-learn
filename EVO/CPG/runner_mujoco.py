@@ -75,7 +75,7 @@ class LocalRunner(Runner):
             data = mujoco.MjData(model)
 
             model.jnt_stiffness = [1.0] * (num_joints + 1)
-            model.dof_damping = [1.0] * len(data.qvel)
+            model.dof_damping = [0.05] * len(data.qvel)
 
             initial_targets = [
                 dof_state

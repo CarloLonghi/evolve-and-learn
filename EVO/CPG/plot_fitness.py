@@ -2,7 +2,7 @@ import argparse
 
 import matplotlib.pyplot as plt
 import pandas
-from revde_optimizer import (DbRevDEOptimizerIndividual,
+from revde_optimizer import (DbRevDEOptimizerBestIndividual,
                              DbRevDEOptimizerIndividual)
 from revolve2.core.database import open_database_sqlite
 from sqlalchemy.future import select
