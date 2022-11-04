@@ -7,7 +7,7 @@ import mujoco_viewer
 import numpy as np
 
 from config import NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT, NUM_STEPS
-from replay_buffer import Buffer
+from replay_buffer import ReplayBuffer
 
 try:
     import logging
@@ -58,7 +58,7 @@ class LocalRunnerTrain(Runner):
         """
         self._headless = headless
 
-    async def run_batch(self, batch: Batch, controller: ActorController, num_agents: int) -> BatchResults:
+    async def run_batch(self, batch: Batch, buffer: ReplayBuffer, num_agents: int) -> BatchResults:
         """
         Run the provided batch by simulating each contained environment.
 
@@ -66,7 +66,6 @@ class LocalRunnerTrain(Runner):
         :returns: List of simulation states in ascending order of time.
         """
         logging.info("Starting simulation batch with mujoco.")
-        self._controller = controller
         self._num_agents = num_agents
 
         control_step = 1 / batch.control_frequency
@@ -74,8 +73,6 @@ class LocalRunnerTrain(Runner):
         results = BatchResults([EnvironmentResults([]) for _ in batch.environments])
 
         num_joints =  len(batch.environments[0].actors[0].actor.joints)
-        obs_dims = (num_joints*NUM_OBS_TIMES, 4)
-        buffer = Buffer(obs_dims, num_joints, self._num_agents)
         sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
 
         for env_index, env_descr in enumerate(batch.environments):
@@ -115,7 +112,6 @@ class LocalRunnerTrain(Runner):
             old_position = results.environment_results[env_index].environment_states[0].actor_states[0].position
             new_observation = [[] for _ in range(NUM_OBSERVATIONS)]
             pos_sliding = np.zeros(NUM_OBS_TIMES*num_joints)
-            buffer.reset_step_count()
             timestep = 0
 
             while (time := data.time) < batch.simulation_time and timestep <= NUM_STEPS:
@@ -158,8 +154,7 @@ class LocalRunnerTrain(Runner):
                         reward = self._calculate_velocity(old_position, new_position)                       
 
                         # insert data of the current state in the replay buffer
-                        buffer.insert_single(
-                                        idx=env_index,
+                        buffer.insert(
                                         obs=observation,
                                         act=action,
                                         logp=logp,
@@ -193,10 +188,7 @@ class LocalRunnerTrain(Runner):
         logging.info(f"Average cumulative reward after {NUM_STEPS} steps: {np.mean(np.sum(sum_rewards, axis=0))}")
         sum_rewards = np.zeros((NUM_STEPS, NUM_PARALLEL_AGENT))
 
-        self._controller.train(buffer)
-
         timestep = 0
-        buffer = Buffer(obs_dims, num_joints, self._num_agents)  
 
         logging.info("Finished batch.")
 

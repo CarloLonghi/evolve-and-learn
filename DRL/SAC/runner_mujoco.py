@@ -7,7 +7,7 @@ import mujoco_viewer
 import numpy as np
 
 from config import NUM_OBS_TIMES, NUM_OBSERVATIONS, NUM_PARALLEL_AGENT, NUM_STEPS
-from replay_buffer import Buffer
+from replay_buffer import ReplayBuffer
 
 try:
     import logging
@@ -80,7 +80,7 @@ class LocalRunnerTrain(Runner):
             data = mujoco.MjData(model)
 
             model.jnt_stiffness = [1.0] * (num_joints + 1)
-            model.dof_damping = [0.05] * len(data.qvel)
+            model.dof_damping = [1.0] * len(data.qvel)
 
             initial_targets = [
                 dof_state

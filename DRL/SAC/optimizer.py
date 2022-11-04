@@ -1,6 +1,7 @@
 import torch
+from replay_buffer import ReplayBuffer
 
-from config import ACTION_CONSTRAINT, NUM_PARALLEL_AGENT, NUM_ITERATIONS
+from config import ACTION_CONSTRAINT, NUM_OBS_TIMES, NUM_PARALLEL_AGENT, NUM_ITERATIONS
 from runner_train_mujoco import LocalRunnerTrain
 from random import Random
 from typing import List
@@ -99,6 +100,7 @@ class SACOptimizer():
         # all parallel agents share the same brain
         brain = SACbrain(from_checkpoint=from_checkpoint)
         self._controller = brain.make_controller(self._body, self._dof_ids, self._file_path)
+        buffer = ReplayBuffer((len(self._dof_ids*NUM_OBS_TIMES), 4), len(self._dof_ids))
 
         for iteration_num in range(NUM_ITERATIONS):
 
@@ -130,7 +132,9 @@ class SACOptimizer():
                 batch.environments.append(env)
             
             # run the simulation
-            batch_results = await self._runner.run_batch(batch, self._controller, self._num_agents)
+            batch_results = await self._runner.run_batch(batch, buffer, self._num_agents)
+
+            self._controller.train(buffer)
 
             fitnesses = [
                 self._calculate_fitness(

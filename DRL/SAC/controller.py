@@ -15,9 +15,9 @@ import torch.nn.functional as F
 from revolve2.actor_controller import ActorController
 from revolve2.serialization import SerializeError, StaticData
 
-from replay_buffer import Buffer
+from replay_buffer import ReplayBuffer
 from network import Actor, InputEncoder, SoftQNetwork
-from config import GAMMA, LR_ACTOR, LR_CRITIC, NUM_ITERATIONS, LR_ACTOR, LR_CRITIC, N_EPOCHS, INIT_TEMPERATURE, LR_ALPHA
+from config import GAMMA, LR_ACTOR, LR_CRITIC, NUM_ITERATIONS, LR_ACTOR, LR_CRITIC, N_EPOCHS, INIT_TEMPERATURE, LR_ALPHA, NUM_PARALLEL_AGENT, NUM_STEPS, TAU
 
 class SACcontroller(ActorController):
     _num_input_neurons: int
@@ -62,7 +62,7 @@ class SACcontroller(ActorController):
 
         self._file_path = file_path
         if from_checkpoint:
-            checkpoint = torch.load("DRL/SAC/model_states/last_checkpoint")
+            checkpoint = torch.load(self._file_path + "/last_checkpoint")
             self._iteration_num = checkpoint['iteration']
             self._actor.load_state_dict(checkpoint['actor_state'])
             self._q1.load_state_dict(checkpoint['q1_state'])
@@ -83,7 +83,7 @@ class SACcontroller(ActorController):
         logp = action_prob.log_prob(action).sum(-1)
         return action, logp
     
-    def train(self, buffer: Buffer):
+    def train(self, buffer: ReplayBuffer):
         """
         Train the neural network used as controller
         args:
@@ -100,59 +100,62 @@ class SACcontroller(ActorController):
         self._iteration_num += 1
 
         for epoch in range(N_EPOCHS):
-            batch_sampler = buffer.get_sampler()
 
             actor_losses = []
             q1_losses = []
             q2_losses = []
             alpha_losses = []
             
-            for obs, act, logp_old, rew, next_obs in batch_sampler:
+            obs, act, logp_old, rew, next_obs = buffer.sample()
 
-                action_prob = self._actor(next_obs)
-                next_action = action_prob.sample()
-                logp = action_prob.log_prob(next_action).sum(-1)
-                target_q1 = self._q1_target(next_obs, next_action)
-                target_q2 = self._q2_target(next_obs, next_action)
-                target_v = torch.min(target_q1, target_q2) - (self.alpha().detach() * logp).unsqueeze(dim=-1)
-                target_q = rew.unsqueeze(dim=-1) + GAMMA * target_v
-                target_q = target_q.detach()
+            action_prob = self._actor(next_obs)
+            next_action = action_prob.sample()
+            logp = action_prob.log_prob(next_action).sum(-1)
+            target_q1 = self._q1_target(next_obs, next_action)
+            target_q2 = self._q2_target(next_obs, next_action)
+            target_v = torch.min(target_q1, target_q2) - (self.alpha().detach() * logp).unsqueeze(dim=-1)
+            target_q = rew.unsqueeze(dim=-1) + GAMMA * target_v
+            target_q = target_q.detach()
 
-                #get current q estimates
-                current_q1 = self._q1(obs, act)
-                current_q2 = self._q2(obs, act)
-                q1_loss = F.mse_loss(current_q1, target_q)
-                q2_loss = F.mse_loss(current_q2, target_q)
+            #get current q estimates
+            current_q1 = self._q1(obs, act)
+            current_q2 = self._q2(obs, act)
+            q1_loss = F.mse_loss(current_q1, target_q)
+            q2_loss = F.mse_loss(current_q2, target_q)
 
-                action_dist = self._actor(obs)
-                action = action_dist.sample()
-                logp = action_prob.log_prob(next_action).sum(-1)
-                actor_q1 = self._q1(obs, action)
-                actor_q2 = self._q2(obs, action)
-                actor_q = torch.min(actor_q1, actor_q2)
-                actor_loss = (self.alpha().detach() * logp - actor_q).mean()
+            action_dist = self._actor(obs)
+            action = action_dist.sample()
+            logp = action_prob.log_prob(action).sum(-1)
+            actor_q1 = self._q1(obs, action)
+            actor_q2 = self._q2(obs, action)
+            actor_q = torch.min(actor_q1, actor_q2)
+            actor_loss = (self.alpha().detach() * logp - actor_q).mean()
 
-                alpha_loss = (self.alpha() * (-logp - self._target_entropy).detach()).mean()
+            alpha_loss = (self.alpha() * (-logp - self._target_entropy).detach()).mean()
 
-                self.actor_optimizer.zero_grad()
-                self.q1_optimizer.zero_grad()
-                self.q2_optimizer.zero_grad()
-                self.log_alpha_optimizer.zero_grad()
-                actor_loss.backward()
-                q1_loss.backward()
-                q2_loss.backward()
-                alpha_loss.backward()
-                actor_losses.append(actor_loss.item())
-                q1_losses.append(q1_loss.item())
-                q2_losses.append(q2_loss.item())
-                alpha_losses.append(alpha_loss.item())
+            self.actor_optimizer.zero_grad()
+            self.q1_optimizer.zero_grad()
+            self.q2_optimizer.zero_grad()
+            self.log_alpha_optimizer.zero_grad()
+            actor_loss.backward()
+            q1_loss.backward()
+            q2_loss.backward()
+            alpha_loss.backward()
+            actor_losses.append(actor_loss.item())
+            q1_losses.append(q1_loss.item())
+            q2_losses.append(q2_loss.item())
+            alpha_losses.append(alpha_loss.item())
 
-                self.actor_optimizer.step()
-                self.q1_optimizer.step()
-                self.q2_optimizer.step()
-                self.log_alpha_optimizer.step()
+            self.actor_optimizer.step()
+            self.q1_optimizer.step()
+            self.q2_optimizer.step()
+            self.log_alpha_optimizer.step()
 
-            logging.info(f"EPOCH {epoch + 1} actor loss:  {np.mean(actor_losses):.5f}, q1 loss: {np.mean(q1_losses):.5f}, q2 loss: {np.mean(q2_losses):.5f}")
+            # update target networks
+            self._q1_target = soft_copy(self._q1_target, self._q1, TAU)
+            self._q2_target = soft_copy(self._q2_target, self._q2, TAU)
+
+            logging.info(f"EPOCH {epoch + 1} actor loss:  {np.mean(actor_losses):.5f}, q1 loss: {np.mean(q1_losses):.5f}, q2 loss: {np.mean(q2_losses):.5f}, alpha loss: {np.mean(alpha_losses):.5f}")
 
         state = {
             'iteration': self._iteration_num,
@@ -168,7 +171,7 @@ class SACcontroller(ActorController):
         torch.save(state, self._file_path + "/last_checkpoint")
 
         # log statistics
-        mean_rew = torch.mean(torch.mean(buffer.rewards, axis=0)).item()
+        mean_rew = torch.mean(torch.mean(buffer.rewards[buffer.step-(NUM_PARALLEL_AGENT*NUM_STEPS):buffer.step], axis=0)).item()
         with open(self._file_path + '/statistics.csv', 'a', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([mean_rew,])
@@ -227,3 +230,8 @@ def lr_linear_decay(optimizer, iter, total_iters, initial_lr):
     lr = initial_lr - (initial_lr * (iter / float(total_iters)))
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
+
+def soft_copy(target, network, tau):
+    for target_param, param in zip(target.parameters(), network.parameters()):
+        target_param.data.copy_(target_param.data * (1 - tau) + param.data * tau)
+    return target
