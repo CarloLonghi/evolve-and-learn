@@ -17,6 +17,7 @@ from revolve2.actor_controller import ActorController
 from revolve2.serialization import SerializeError, StaticData
 from torch.optim import Adam
 
+from transfer import transfer_weights
 
 class PPOcontroller(ActorController):
     _num_input_neurons: int
@@ -39,12 +40,11 @@ class PPOcontroller(ActorController):
             from_checkpoint: if True, resumes training from the last checkpoint
         """
         self._iteration_num = 0
-        self._actor_critic = actor_critic
+        self._actor_critic = transfer_weights(actor_critic)
         actor_params = [p for p in self._actor_critic.actor.parameters() if p.requires_grad]
         critic_params = [p for p in self._actor_critic.critic.parameters() if p.requires_grad]
         self.actor_optimizer = Adam(actor_params, lr=LR_ACTOR)
         self.critic_optimizer = Adam(critic_params, lr=LR_CRITIC)
-        #self.optimizer = Adam([p for p in self._actor_critic.parameters() if p.requires_grad])
         self._file_path = file_path
         if from_checkpoint:
             checkpoint = torch.load(self._file_path + "/last_checkpoint")
