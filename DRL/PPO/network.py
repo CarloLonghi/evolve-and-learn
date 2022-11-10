@@ -17,8 +17,8 @@ class Actor(nn.Module):
         super().__init__()
         self.pi_encoder = ObservationEncoder(obs_dim=obs_dim)
         self.mean_layer = nn.Linear(32, act_dim)
-        nn.init.orthogonal_(self.mean_layer.weight, 0.01)
-        nn.init.constant_(self.mean_layer.bias, 0)
+        #nn.init.orthogonal_(self.mean_layer.weight, 0.01)
+        #nn.init.constant_(self.mean_layer.bias, 0)
         self.std_layer = nn.Parameter(torch.zeros(act_dim))
 
     def forward(self, obs):

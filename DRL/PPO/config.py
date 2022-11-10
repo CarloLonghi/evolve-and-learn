@@ -17,7 +17,7 @@ ENTROPY_COEFF = 0.01
 
 # learning rates
 LR_ACTOR = 1e-2
-LR_CRITIC = 5e-4
+LR_CRITIC = 1e-3
 
 # other parameters
 GAMMA = 0.99
@@ -32,4 +32,4 @@ NUM_OBS_TIMES = 3
 # dimension of the different types of  observations
 NUM_OBSERVATIONS = 2
 
-ACTION_CONSTRAINT = 1 #[-ACTION_CONSTRAINT, ACTION_CONSTRAINT]
+ACTION_CONSTRAINT = 1.0 #[-ACTION_CONSTRAINT, ACTION_CONSTRAINT]
