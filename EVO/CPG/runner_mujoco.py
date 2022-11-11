@@ -92,6 +92,7 @@ class LocalRunner(Runner):
                     model,
                     data,
                 )
+                viewer._render_every_frame = False
 
             last_control_time = 0.0
             last_sample_time = 0.0
