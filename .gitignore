@@ -8,3 +8,4 @@ ppo_model_states
 .idea
 test
 experiments.sh
+*.ipynb

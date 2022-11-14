@@ -1,22 +1,45 @@
 """Visualize and simulate the best robot from the optimization process."""
 
 import math
-
+from brain import RevDENNbrain
+from network import Actor
+from config import NUM_OBS_TIMES
 from revde_optimizer import DbRevDEOptimizerIndividual
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
-from revolve2.runners.mujoco import ModularRobotRerunner
-from revolve2.standard_resources.modular_robots import *
+from rerunner import ModularRobotRerunner
+from revolve2.standard_resources import modular_robots
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
+import argparse
+import torch
 
 
 async def main() -> None:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "body",
+        type=str,
+        help="The body of the robot.",
+    )
+    parser.add_argument(
+        "num",
+        type=str,
+        help="The number of the experiment",
+    )
+    args = parser.parse_args()
+    body = args.body
+    num = args.num
+
+    file_path = "./data/RevDENN_580/"+body+"/database"+num
+
+
     """Run the script."""
-    db = open_async_database_sqlite("./database")
+    db = open_async_database_sqlite(file_path)
     async with AsyncSession(db) as session:
         best_individual = (
             (
@@ -42,7 +65,7 @@ async def main() -> None:
         print(f"fitness: {best_individual.fitness}")
         print(f"params: {params}")
 
-        body = gecko()
+        body = modular_robots.get(body)
 
         actor, dof_ids = body.to_actor()
         active_hinges_unsorted = body.find_active_hinges()
@@ -51,24 +74,14 @@ async def main() -> None:
         }
         active_hinges = [active_hinge_map[id] for id in dof_ids]
 
-        cpg_network_structure = make_cpg_network_structure_neighbour(active_hinges)
-
-        initial_state = cpg_network_structure.make_uniform_state(0.5 * math.pi / 2.0)
-        weight_matrix = (
-            cpg_network_structure.make_connection_weights_matrix_from_params(params)
-        )
-        dof_ranges = cpg_network_structure.make_uniform_dof_ranges(1.0)
-        brain = BrainCpgNetworkStatic(
-            initial_state,
-            cpg_network_structure.num_cpgs,
-            weight_matrix,
-            dof_ranges,
-        )
+        brain = RevDENNbrain()
+        controller = brain.make_controller(body, dof_ids, params)
+        controller.load_parameters(torch.tensor(params, dtype=torch.float32))
 
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5)
+    await rerunner.rerun(body, controller, 5)
 
 
 if __name__ == "__main__":

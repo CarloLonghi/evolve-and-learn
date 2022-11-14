@@ -8,15 +8,33 @@ from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
-from revolve2.runners.mujoco import ModularRobotRerunner
-from revolve2.standard_resources.modular_robots import *
+from rerunner import ModularRobotRerunner
+from revolve2.standard_resources import modular_robots
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
-
+import argparse
 
 async def main() -> None:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "body",
+        type=str,
+        help="The body of the robot.",
+    )
+    parser.add_argument(
+        "num",
+        type=str,
+        help="The number of the experiment",
+    )
+    args = parser.parse_args()
+    body = args.body
+    num = args.num
+
+    file_path = "./data/RevDE/"+body+"/database"+num
+
     """Run the script."""
-    db = open_async_database_sqlite("./database")
+    db = open_async_database_sqlite(file_path)
     async with AsyncSession(db) as session:
         best_individual = (
             (
@@ -42,7 +60,7 @@ async def main() -> None:
         print(f"fitness: {best_individual.fitness}")
         print(f"params: {params}")
 
-        body = gecko()
+        body = modular_robots.get(body)
 
         actor, dof_ids = body.to_actor()
         active_hinges_unsorted = body.find_active_hinges()
