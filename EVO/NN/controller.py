@@ -19,13 +19,11 @@ class NNcontroller(ActorController):
     _num_input_neurons: int
     _num_output_neurons: int
     _dof_ranges: npt.NDArray[np.float_]
-    _file_path: str
 
     _actor: Actor
 
     def __init__(
         self,
-        file_path: str,
         actor: Actor,
         dof_ranges: npt.NDArray[np.float_],
         from_checkpoint: bool = False,
@@ -38,11 +36,6 @@ class NNcontroller(ActorController):
             from_checkpoint: if True, resumes training from the last checkpoint
         """
         self._actor = actor
-        self._file_path = file_path
-        if from_checkpoint:
-            checkpoint = torch.load(self._file_path + "/last_checkpoint")
-            self._iteration_num = checkpoint['iteration']
-            self._actor.load_state_dict(checkpoint['model_state'])
         self._dof_ranges = dof_ranges
 
     def get_dof_targets(self, observation) -> List[float]:

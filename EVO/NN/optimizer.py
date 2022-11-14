@@ -192,7 +192,7 @@ class Optimizer(RevDEOptimizer):
         for params in population:
             
             brain = RevDENNbrain()
-            controller = brain.make_controller(self._body, self._dof_ids, params)
+            controller = brain.make_controller(self._body, self._dof_ids)
             controller.load_parameters(params)
 
             bounding_box = self._actor.calc_aabb()

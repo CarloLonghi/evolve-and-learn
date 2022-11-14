@@ -35,7 +35,7 @@ async def main() -> None:
     body = args.body
     num = args.num
 
-    file_path = "./data/RevDENN_580/"+body+"/database"+num
+    file_path = "./data/RevDENN/"+body+"/database"+num
 
 
     """Run the script."""
@@ -75,7 +75,7 @@ async def main() -> None:
         active_hinges = [active_hinge_map[id] for id in dof_ids]
 
         brain = RevDENNbrain()
-        controller = brain.make_controller(body, dof_ids, params)
+        controller = brain.make_controller(body, dof_ids)
         controller.load_parameters(torch.tensor(params, dtype=torch.float32))
 
         bot = ModularRobot(body, brain)
