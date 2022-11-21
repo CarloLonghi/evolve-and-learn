@@ -83,9 +83,6 @@ class LocalRunnerTrain(Runner):
             # TODO initial dof state
             data = mujoco.MjData(model)
 
-            model.jnt_stiffness = [1.0] * (num_joints + 1)
-            model.dof_damping = [0.05] * len(data.qvel)
-
             initial_targets = [
                 dof_state
                 for posed_actor in env_descr.actors
@@ -270,10 +267,12 @@ class LocalRunnerTrain(Runner):
             robot = mjcf.from_file(botfile)
             botfile.close()
 
+            LocalRunnerTrain._set_parameters(robot)
+
             for joint in posed_actor.actor.joints:
                 robot.actuator.add(
                     "position",
-                    kp=5.0,
+                    kp=1.0,
                     joint=robot.find(
                         namespace="joint",
                         identifier=joint.name,
@@ -340,3 +339,20 @@ class LocalRunnerTrain(Runner):
         for i, target in enumerate(targets):
             data.ctrl[2 * i] = target
             data.ctrl[2 * i + 1] = 0
+
+
+    @staticmethod
+    def _set_recursive_parameters(element):
+        if element.tag == "body":
+            for sub_element in element.body._elements:
+                LocalRunnerTrain._set_recursive_parameters(sub_element)
+
+        if element.tag == "geom":
+            element.friction = [0.7, 0.1, 0.1]
+
+
+
+    @staticmethod
+    def _set_parameters(robot):
+        for element in robot.worldbody.body._elements:
+            LocalRunnerTrain._set_recursive_parameters(element)

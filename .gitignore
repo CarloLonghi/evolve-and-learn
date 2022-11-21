@@ -7,5 +7,5 @@ ppo_model_states
 .venv
 .idea
 test
-experiments.sh
+experiment*
 *.ipynb
