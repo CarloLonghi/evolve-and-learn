@@ -66,7 +66,7 @@ class PPOOptimizer():
 
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
         action, value, logp = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
+        control.set_dof_targets(0, torch.tanh(action)*ACTION_CONSTRAINT)
         # controller.train() TODO
         return action.tolist(), value.item(), logp.item()
 

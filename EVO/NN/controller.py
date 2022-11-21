@@ -43,7 +43,6 @@ class NNcontroller(ActorController):
         Get the target position for the motors of the body
         """
         action = self._actor(observation)
-        action = torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT)
         return action
     
     # TODO

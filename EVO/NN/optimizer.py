@@ -229,7 +229,7 @@ class Optimizer(RevDEOptimizer):
     def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
         controller = self._controllers[environment_index]
         action = controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
+        control.set_dof_targets(0, torch.tanh(action) * ACTION_CONSTRAINT)
         return action.tolist()
 
     @staticmethod
