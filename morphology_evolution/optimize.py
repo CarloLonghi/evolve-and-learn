@@ -19,16 +19,14 @@ async def main() -> None:
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
-    POPULATION_SIZE = 10
-    OFFSPRING_SIZE = 10
+    POPULATION_SIZE = 4
+    OFFSPRING_SIZE = 4
     NUM_GENERATIONS = 3
 
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s",
     )
-
-    logging.info("Starting optimization")
 
     # random number generator
     rng = Random()
@@ -76,11 +74,11 @@ async def main() -> None:
             offspring_size=OFFSPRING_SIZE,
         )
 
-    logging.info("Starting optimization process..")
+    logging.info("Starting moprhology optimization")
 
     await optimizer.run()
 
-    logging.info("Finished optimizing.")
+    logging.info("Finished optimizing morphology.")
 
 
 if __name__ == "__main__":

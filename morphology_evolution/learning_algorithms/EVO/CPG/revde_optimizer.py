@@ -337,7 +337,7 @@ class RevDEOptimizer(ABC, Process):
                             for index, individual_id in enumerate(db_generation_ids)
                         ]
                     )
-                    logging.info(f"Finished generation {self.__gen_num}")
+                    logging.info(f"Finished controller generation {self.__gen_num}")
                     self.__gen_num += 1
 
         while self.__safe_must_do_next_gen():
@@ -431,7 +431,7 @@ class RevDEOptimizer(ABC, Process):
                             for index, individual_id in enumerate(db_generation_ids)
                         ]
                     )
-                    logging.info(f"Finished generation {self.__gen_num}")
+                    logging.info(f"Finished controller generation {self.__gen_num}")
                     self.__gen_num += 1
 
     def proposal(self, theta):

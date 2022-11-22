@@ -58,12 +58,8 @@ async def main(body, gen, num) -> None:
         num_generations=NUM_GENERATIONS,
     )
     if maybe_optimizer is not None:
-        logging.info(
-            f"Recovered. Last finished generation: {maybe_optimizer.generation_number - 1}."
-        )
         optimizer = maybe_optimizer
     else:
-        logging.info("No recovery data found. Starting at generation 0.")
         optimizer = await Optimizer.new(
             database,
             process_id,
@@ -98,37 +94,7 @@ async def main(body, gen, num) -> None:
             .all()[0]
         )
 
-        params = [
-            p
-            for p in (
-                await Ndarray1xnSerializer.from_database(
-                    session, [best_individual.individual]
-                )
-            )[0]
-        ]
-
-        actor, dof_ids = body.to_actor()
-        active_hinges_unsorted = body.find_active_hinges()
-        active_hinge_map = {
-            active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
-        }
-        active_hinges = [active_hinge_map[id] for id in dof_ids]
-
-        cpg_network_structure = make_cpg_network_structure_neighbour(active_hinges)
-
-        initial_state = cpg_network_structure.make_uniform_state(0.5 * math.pi / 2.0)
-        weight_matrix = (
-            cpg_network_structure.make_connection_weights_matrix_from_params(params)
-        )
-        dof_ranges = cpg_network_structure.make_uniform_dof_ranges(1.0)
-        brain = BrainCpgNetworkStatic(
-            initial_state,
-            cpg_network_structure.num_cpgs,
-            weight_matrix,
-            dof_ranges,
-        )
-
-        return brain, best_individual.fitness
+        return best_individual.fitness
 
 
 if __name__ == "__main__":

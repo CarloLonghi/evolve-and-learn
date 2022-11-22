@@ -15,7 +15,7 @@ from revolve2.actor_controller import ActorController
 from revolve2.core.database import IncompatibleError
 from revolve2.core.database.serializers import FloatSerializer
 from revolve2.core.optimization import ProcessIdGen
-from revolve2.core.optimization.ea.generic_ea import EAOptimizer
+from _optimizer import EAOptimizer
 from revolve2.core.physics.running import (
     ActorControl,
     ActorState,
@@ -37,7 +37,7 @@ from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
 from revolve2.core.modular_robot import Body, Brain
 from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimizer
 from config import *
-
+import logging
 
 class Optimizer(EAOptimizer[Genotype, float]):
     """
@@ -276,11 +276,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-                loop = None
-            brain, fitness = await learn_controller(body, self.generation_index, body_num)
+            logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
+            fitness = await learn_controller(body, self.generation_index, body_num)
             fitnesses.append(fitness)
 
         return fitnesses
