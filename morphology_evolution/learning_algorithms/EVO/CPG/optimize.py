@@ -8,59 +8,43 @@ from .optimizer import Optimizer
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.optimization import ProcessIdGen
 from revolve2.standard_resources import modular_robots
+from .revde_optimizer import DbRevDEOptimizerIndividual
+from revolve2.core.database.serializers import Ndarray1xnSerializer
+from revolve2.core.modular_robot.brains import (
+    BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
+import math
+
+from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.future import select
 
 
-async def main() -> None:
+async def main(body, gen, num) -> None:
     """Run the optimization process."""
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "body",
-        type=str,
-        help="The body of the robot.",
-    )
-    parser.add_argument(
-        "num",
-        type=str,
-        help="The number of the experiment",
-    )
-    args = parser.parse_args()
-    num = args.num
-    body = args.body
-
-    POPULATION_SIZE = 10
-    NUM_GENERATIONS = 10
+    POPULATION_SIZE = 2
+    NUM_GENERATIONS = 2
     SCALING = 0.5
     CROSS_PROB = 0.9
 
-    SIMULATION_TIME = 30
+    SIMULATION_TIME = 10
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s",
+    )
+
     # random number generator
     rng = Random()
-    rng.seed(0)
-
-    file_path = "./data/RevDE/"+body+"/database"+num
+    rng.seed(42)
 
     # database
-    database = open_async_database_sqlite(file_path)
-
-    fileh = logging.FileHandler(file_path+"/exp.log")
-    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")
-    fileh.setFormatter(formatter)
-
-    log = logging.getLogger()  # root logger
-    log.setLevel(logging.INFO)
-    for hdlr in log.handlers[:]:  # remove all old handlers
-        log.removeHandler(hdlr)
-    log.addHandler(fileh) 
+    database = open_async_database_sqlite('database/morph/gen_' + str(gen) + '/database_' + str(num))
 
     # process id generator
     process_id_gen = ProcessIdGen()
     process_id = process_id_gen.gen()
-
-    body = modular_robots.get(body)
 
     maybe_optimizer = await Optimizer.from_database(
         database=database,
@@ -95,11 +79,56 @@ async def main() -> None:
             cross_prob=CROSS_PROB,
         )
 
-    logging.info("Starting optimization process..")
+    logging.info("Starting controller optimization process..")
 
     await optimizer.run()
 
-    logging.info("Finished optimizing.")
+    logging.info("Finished optimizing controller.")
+
+    async with AsyncSession(database) as session:
+        best_individual = (
+            (
+                await session.execute(
+                    select(DbRevDEOptimizerIndividual).order_by(
+                        DbRevDEOptimizerIndividual.fitness.desc()
+                    )
+                )
+            )
+            .scalars()
+            .all()[0]
+        )
+
+        params = [
+            p
+            for p in (
+                await Ndarray1xnSerializer.from_database(
+                    session, [best_individual.individual]
+                )
+            )[0]
+        ]
+
+        actor, dof_ids = body.to_actor()
+        active_hinges_unsorted = body.find_active_hinges()
+        active_hinge_map = {
+            active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+        }
+        active_hinges = [active_hinge_map[id] for id in dof_ids]
+
+        cpg_network_structure = make_cpg_network_structure_neighbour(active_hinges)
+
+        initial_state = cpg_network_structure.make_uniform_state(0.5 * math.pi / 2.0)
+        weight_matrix = (
+            cpg_network_structure.make_connection_weights_matrix_from_params(params)
+        )
+        dof_ranges = cpg_network_structure.make_uniform_dof_ranges(1.0)
+        brain = BrainCpgNetworkStatic(
+            initial_state,
+            cpg_network_structure.num_cpgs,
+            weight_matrix,
+            dof_ranges,
+        )
+
+        return brain, best_individual.fitness
 
 
 if __name__ == "__main__":
