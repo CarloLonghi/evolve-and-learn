@@ -19,9 +19,9 @@ async def main() -> None:
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
-    POPULATION_SIZE = 4
-    OFFSPRING_SIZE = 4
-    NUM_GENERATIONS = 3
+    POPULATION_SIZE = 10
+    OFFSPRING_SIZE = 10
+    NUM_GENERATIONS = 10
 
     logging.basicConfig(
         level=logging.INFO,

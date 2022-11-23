@@ -36,7 +36,7 @@ def random_v1(
 
 
 def develop(genotype: ArrayGenotype) -> Brain:
-    genotype.genotype.finalize()
+    #genotype.genotype.finalize()
     return genotype.genotype
 
 class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):

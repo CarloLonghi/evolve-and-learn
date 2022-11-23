@@ -205,7 +205,9 @@ def random(
         num_initial_mutations,
     )
 
-    brain = random_array_genotype(10 ** 2, rng)
+    num_hinges = len(body_develop(body).find_active_hinges())
+
+    brain = random_array_genotype(num_hinges ** 2, rng)
 
     return Genotype(body, brain)
 

@@ -21,8 +21,8 @@ from sqlalchemy.future import select
 async def main(body, gen, num) -> None:
     """Run the optimization process."""
 
-    POPULATION_SIZE = 2
-    NUM_GENERATIONS = 2
+    POPULATION_SIZE = 10
+    NUM_GENERATIONS = 5
     SCALING = 0.5
     CROSS_PROB = 0.9
 
@@ -94,7 +94,11 @@ async def main(body, gen, num) -> None:
             .all()[0]
         )
 
-        return best_individual.fitness
+        best_fitness = best_individual.fitness
+        best_individual_id = best_individual.individual
+        best_params = (await Ndarray1xnSerializer.from_database(session, [best_individual_id]))[0]
+
+        return best_params, best_fitness
 
 
 if __name__ == "__main__":
