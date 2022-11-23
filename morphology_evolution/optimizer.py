@@ -277,7 +277,12 @@ class Optimizer(EAOptimizer[Genotype, float]):
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
-            fitness = await learn_controller(body, self.generation_index, body_num)
+            fitness = 0.0
+            # check that the morphology has at least one active hinge. Otherwise the maximum fitness is 0
+            if len(body.find_active_hinges()) <= 0:
+                logging.info("Morphology num " + str(body_num) + " has no active hinges")
+            else:
+                fitness = await learn_controller(body, self.generation_index, body_num)
             fitnesses.append(fitness)
 
         return fitnesses
@@ -315,22 +320,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 num_generations=self._num_generations,
             )
         )
-
-async def _optimize_controller(database, process_id, process_id_gen, rng, population_size, body, ) -> Tuple[Brain, int]:
-    controller_optimizer = await ControllerOptimizer.new(
-        database,
-        process_id,
-        process_id_gen,
-        rng,
-        population_size,
-        body,
-        simulation_time=SIMULATION_TIME,
-        sampling_frequency=SAMPLING_FREQUENCY,
-        control_frequency=CONTROL_FREQUENCY,
-        num_generations=NUM_GENERATIONS,
-        scaling=SCALING,
-        cross_prob=CROSS_PROB,
-    )
 
 
 DbBase = declarative_base()
