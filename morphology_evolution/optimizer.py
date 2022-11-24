@@ -11,13 +11,11 @@ import revolve2.core.optimization.ea.generic_ea.selection as selection
 import sqlalchemy
 from genotype import Genotype, GenotypeSerializer, crossover, mutate
 from pyrr import Quaternion, Vector3
-from revolve2.actor_controller import ActorController
 from revolve2.core.database import IncompatibleError
 from revolve2.core.database.serializers import FloatSerializer
 from revolve2.core.optimization import ProcessIdGen
 from _optimizer import EAOptimizer
 from revolve2.core.physics.running import (
-    ActorControl,
     ActorState,
     Batch,
     Environment,
@@ -36,6 +34,9 @@ from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
 
 from revolve2.core.modular_robot import Body, Brain
 from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimizer
+from learning_algorithms.EVO.CPG.environment_actor_controller import (
+    EnvironmentActorController,
+)
 from config import *
 import logging
 
@@ -49,8 +50,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
     _process_id: int
 
     _runner: Runner
-
-    _controllers: List[ActorController]
 
     _innov_db_body: multineat.InnovationDatabase
     _innov_db_brain: multineat.InnovationDatabase
@@ -264,10 +263,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             simulation_time=self._simulation_time,
             sampling_frequency=self._sampling_frequency,
             control_frequency=self._control_frequency,
-            control=self._control,
         )
-
-        self._controllers = []
 
         fitnesses = []
 
@@ -287,13 +283,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
             fitnesses.append(fitness)
 
         return fitnesses
-
-    def _control(
-        self, environment_index: int, dt: float, control: ActorControl
-    ) -> None:
-        controller = self._controllers[environment_index]
-        controller.step(dt)
-        control.set_dof_targets(0, controller.get_dof_targets())
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:

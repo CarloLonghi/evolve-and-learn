@@ -7,14 +7,16 @@ import numpy as np
 import numpy.typing as npt
 from pyrr import Quaternion, Vector3
 from .revde_optimizer import RevDEOptimizer
-from revolve2.actor_controller import ActorController
 from revolve2.actor_controllers.cpg import CpgNetworkStructure
 from revolve2.core.modular_robot import Body
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from revolve2.core.optimization import ProcessIdGen
 from revolve2.core.physics.actor import Actor
-from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+from .environment_actor_controller import (
+    EnvironmentActorController,
+)
+from revolve2.core.physics.running import (ActorState, Batch,
                                            Environment, PosedActor, Runner)
 from .runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -34,7 +36,6 @@ class Optimizer(RevDEOptimizer):
     _cpg_network_structure: CpgNetworkStructure
 
     _runner: Runner
-    _controllers: List[ActorController]
 
     _simulation_time: int
     _sampling_frequency: float
@@ -101,7 +102,7 @@ class Optimizer(RevDEOptimizer):
             cross_prob=cross_prob,
         )
 
-        self._init_runner()
+        self._runner = self._init_runner()
 
         self._simulation_time = simulation_time
         self._sampling_frequency = sampling_frequency
@@ -150,7 +151,7 @@ class Optimizer(RevDEOptimizer):
         self._body = robot_body
         self._init_actor_and_cpg_network_structure()
 
-        self._init_runner()
+        self._runner = self._init_runner()
 
         self._simulation_time = simulation_time
         self._sampling_frequency = sampling_frequency
@@ -171,8 +172,8 @@ class Optimizer(RevDEOptimizer):
             active_hinges
         )
 
-    def _init_runner(self) -> None:
-        self._runner = LocalRunner(headless=True)
+    def _init_runner(self, num_simulators: int = 1) -> None:
+        return LocalRunner(headless=True, num_simulators=num_simulators)
 
     async def _evaluate_population(
         self,
@@ -185,10 +186,9 @@ class Optimizer(RevDEOptimizer):
             simulation_time=self._simulation_time,
             sampling_frequency=self._sampling_frequency,
             control_frequency=self._control_frequency,
-            control=self._control,
         )
 
-        self._controllers = []
+        self._runner = self._init_runner(population.shape[0])
 
         for params in population:
             initial_state = self._cpg_network_structure.make_uniform_state(
@@ -209,8 +209,7 @@ class Optimizer(RevDEOptimizer):
             controller = brain.make_controller(self._body, self._dof_ids)
 
             bounding_box = self._actor.calc_aabb()
-            self._controllers.append(controller)
-            env = Environment()
+            env = Environment(EnvironmentActorController(controller))
             env.actors.append(
                 PosedActor(
                     self._actor,
@@ -238,13 +237,6 @@ class Optimizer(RevDEOptimizer):
                 for environment_result in batch_results.environment_results
             ]
         )
-
-    def _control(
-        self, environment_index: int, dt: float, control: ActorControl
-    ) -> None:
-        controller = self._controllers[environment_index]
-        controller.step(dt)
-        control.set_dof_targets(0, controller.get_dof_targets())
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:

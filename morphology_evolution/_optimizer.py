@@ -358,6 +358,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         """Run the optimizer."""
         # evaluate initial population if required
         if self.__latest_fitnesses is None:
+            logging.info("Evaluating initial population of morphologies")
             self.__latest_fitnesses = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
                 self.__database,
@@ -366,6 +367,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             )
             initial_population = self.__latest_population
             initial_fitnesses = self.__latest_fitnesses
+            logging.info("Finished evaluating initial population of morphologies")
         else:
             initial_population = None
             initial_fitnesses = None
@@ -373,6 +375,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         while self.__safe_must_do_next_gen():
 
             self.__generation_index += 1
+
+            logging.info(f"Starting generation of morphologies num: {str(self.__generation_index)}")
 
             # let user select parents
             parent_selections = self.__safe_select_parents(
@@ -450,7 +454,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             initial_population = None
             initial_fitnesses = None
 
-            logging.info(f"Finished  morphology generation {self.__generation_index}.")
+            logging.info(f"Finished morphology generation {self.__generation_index}.")
 
         assert (
             self.__generation_index > 0

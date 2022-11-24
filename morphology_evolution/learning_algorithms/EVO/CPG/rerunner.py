@@ -1,16 +1,14 @@
 """Rerun(watch) a modular robot in Mujoco."""
 
 from pyrr import Quaternion, Vector3
-from revolve2.actor_controller import ActorController
 from revolve2.core.modular_robot import ModularRobot
-from revolve2.core.physics.running import ActorControl, Batch, Environment, PosedActor
 from .runner_mujoco import LocalRunner
+from .environment_actor_controller import EnvironmentActorController
+from revolve2.core.physics.running import Batch, Environment, PosedActor
 
 
 class ModularRobotRerunner:
     """Rerunner for a single robot that uses Mujoco."""
-
-    _controller: ActorController
 
     async def rerun(self, robot: ModularRobot, control_frequency: float) -> None:
         """
@@ -23,12 +21,11 @@ class ModularRobotRerunner:
             simulation_time=1000000,
             sampling_frequency=0.0001,
             control_frequency=control_frequency,
-            control=self._control,
         )
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment()
+        env = Environment(EnvironmentActorController(self._controller))
         env.actors.append(
             PosedActor(
                 actor,
@@ -41,13 +38,6 @@ class ModularRobotRerunner:
 
         runner = LocalRunner(headless=False)
         await runner.run_batch(batch)
-
-    def _control(
-        self, environment_index: int, dt: float, control: ActorControl
-    ) -> None:
-        self._controller.step(dt)
-        control.set_dof_targets(0, self._controller.get_dof_targets())
-
 
 if __name__ == "__main__":
     print(
