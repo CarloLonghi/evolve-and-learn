@@ -13,7 +13,7 @@ from revolve2.serialization import Serializable, SerializeError, StaticData
 from revolve2.core.database import IncompatibleError, Serializer
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
-from .genotype_schema import DbBase, DbArrayGenotype, DbArrayGenotypeItem
+from .genotype_schema import DbBase, DbArrayGenotype
 import numpy.typing as npt
 import numpy as np
 import itertools
@@ -43,6 +43,7 @@ class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
     @classmethod
     async def create_tables(cls, session: AsyncSession) -> None:
         await (await session.connection()).run_sync(DbBase.metadata.create_all)
+        await Ndarray1xnSerializer.create_tables(session)
 
     @classmethod
     def identifying_table(cls) -> str:
@@ -52,20 +53,25 @@ class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
     async def to_database(
         cls, session: AsyncSession, objects: List[ArrayGenotype]
     ) -> List[int]:
+
+        db_obj_ids = []
+        for obj in objects:
+            id = await Ndarray1xnSerializer.to_database(
+                session, [obj.genotype]
+            )
+            db_obj_ids += id
+        assert len(db_obj_ids) == len(objects)
+
+
         dbgenotypes = [DbArrayGenotype() for _ in objects]
+        for i, id in enumerate(db_obj_ids):
+            dbgenotypes[i].array = id
+
         session.add_all(dbgenotypes)
         await session.flush()
         ids = [
             dbgenotype.id for dbgenotype in dbgenotypes
         ]
-
-        items = [
-            DbArrayGenotypeItem(array_genotype_id=id, array_index=i, value=v)
-            for id, object in zip(ids, objects)
-            for i, v in enumerate(object.genotype)
-        ]
-
-        session.add_all(items)
 
         return ids
 
@@ -73,23 +79,24 @@ class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
     async def from_database(
         cls, session: AsyncSession, ids: List[int]
     ) -> List[ArrayGenotype]:
-        items = (
+
+        arrays = (
             (
                 await session.execute(
-                    select(DbArrayGenotypeItem)
-                    .filter(DbArrayGenotypeItem.array_genotype_id.in_(ids))
-                    .order_by(DbArrayGenotypeItem.array_index)
+                    select(DbArrayGenotype)
+                    .filter(DbArrayGenotype.id.in_(ids))
                 )
             )
             .scalars()
             .all()
         )
 
+        param_ids = [a.array for a in arrays]
+        params = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in param_ids]
+
         genotypes: List[ArrayGenotype] = [
-            ArrayGenotype(np.array([item.value for item in group]))
-            for _, group in itertools.groupby(
-                items, key=lambda item: cast(int, item.array_genotype_id)
-            )
+            ArrayGenotype(np.array(param))
+            for param in params
         ]
 
         return genotypes

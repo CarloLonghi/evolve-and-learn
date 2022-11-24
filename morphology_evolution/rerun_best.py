@@ -4,21 +4,15 @@ import math
 import numpy as np
 
 from revolve2.core.database import open_async_database_sqlite
-from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from learning_algorithms.EVO.CPG.rerunner import ModularRobotRerunner
-from revolve2.standard_resources import modular_robots
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
-    DbEAOptimizer,
-    DbEAOptimizerGeneration,
     DbEAOptimizerIndividual,
-    DbEAOptimizerParent,
-    DbEAOptimizerState,
 )
 from genotype import DbGenotype, GenotypeSerializer, Genotype
 from revolve2.core.database.serializers import FloatSerializer

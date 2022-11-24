@@ -1,5 +1,6 @@
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
+from revolve2.core.database.serializers import DbNdarray1xn
 
 DbBase = declarative_base()
 
@@ -10,19 +11,6 @@ class DbArrayGenotype(DbBase):
         sqlalchemy.Integer, nullable=False, primary_key=True, autoincrement=True
     )
 
-
-class DbArrayGenotypeItem(DbBase):
-    __tablename__ = "array_genotype_item"
-
-    array_genotype_id = sqlalchemy.Column(
-        sqlalchemy.Integer,
-        sqlalchemy.ForeignKey(DbArrayGenotype.id),
-        nullable=False,
-        primary_key=True,
+    array = sqlalchemy.Column(
+        sqlalchemy.Integer, sqlalchemy.ForeignKey(DbNdarray1xn.id), nullable=False
     )
-    array_index = sqlalchemy.Column(
-        sqlalchemy.Integer,
-        nullable=False,
-        primary_key=True,
-    )
-    value = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
