@@ -13,8 +13,9 @@ from genotype import Genotype, GenotypeSerializer, crossover, mutate
 from pyrr import Quaternion, Vector3
 from revolve2.core.database import IncompatibleError
 from revolve2.core.database.serializers import FloatSerializer
-from revolve2.core.optimization import ProcessIdGen
+from revolve2.core.optimization import DbId
 from _optimizer import EAOptimizer
+#from revolve2.core.optimization.ea.generic_ea import EAOptimizer
 from revolve2.core.physics.running import (
     ActorState,
     Batch,
@@ -34,7 +35,7 @@ from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
 
 from revolve2.core.modular_robot import Body, Brain
 from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimizer
-from learning_algorithms.EVO.CPG.environment_actor_controller import (
+from revolve2.core.physics.environment_actor_controller import (
     EnvironmentActorController,
 )
 from config import *
@@ -47,7 +48,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
     Uses the generic EA optimizer as a base.
     """
 
-    _process_id: int
+    _db_id: DbId
 
     _runner: Runner
 
@@ -66,8 +67,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         initial_population: List[Genotype],
         rng: Random,
         innov_db_body: multineat.InnovationDatabase,
@@ -85,8 +85,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         :param database: Database to use for this optimizer.
         :param session: Session to use when saving data to the database during initialization.
-        :param process_id: Unique identifier in the completely program specifically made for this optimizer.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this optimizer.
         :param initial_population: List of genotypes forming generation 0.
         :param rng: Random number generator.
         :param innov_db_body: Innovation database for the body genotypes.
@@ -100,8 +99,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         await super().ainit_new(
             database=database,
             session=session,
-            process_id=process_id,
-            process_id_gen=process_id_gen,
+            db_id=db_id,
             genotype_type=Genotype,
             genotype_serializer=GenotypeSerializer,
             fitness_type=float,
@@ -110,7 +108,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             initial_population=initial_population,
         )
 
-        self._process_id = process_id
+        self._db_id = db_id
         self._init_runner()
         self._innov_db_body = innov_db_body
         self._innov_db_brain = innov_db_brain
@@ -131,8 +129,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         rng: Random,
         innov_db_body: multineat.InnovationDatabase,
         innov_db_brain: multineat.InnovationDatabase,
@@ -155,8 +152,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         if not await super().ainit_from_database(
             database=database,
             session=session,
-            process_id=process_id,
-            process_id_gen=process_id_gen,
+            db_id=db_id,
             genotype_type=Genotype,
             genotype_serializer=GenotypeSerializer,
             fitness_type=float,
@@ -164,14 +160,14 @@ class Optimizer(EAOptimizer[Genotype, float]):
         ):
             return False
 
-        self._process_id = process_id
+        self._db_id = db_id
         self._init_runner()
 
         opt_row = (
             (
                 await session.execute(
                     select(DbOptimizerState)
-                    .filter(DbOptimizerState.process_id == process_id)
+                    .filter(DbOptimizerState.db_id == self._db_id.fullname)
                     .order_by(DbOptimizerState.generation_index.desc())
                 )
             )
@@ -256,8 +252,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self,
         genotypes: List[Genotype],
         database: AsyncEngine,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
     ) -> List[float]:
         batch = Batch(
             simulation_time=self._simulation_time,
@@ -299,7 +294,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
     def _on_generation_checkpoint(self, session: AsyncSession) -> None:
         session.add(
             DbOptimizerState(
-                process_id=self._process_id,
+                db_id=self._db_id.fullname,
                 generation_index=self.generation_index,
                 rng=pickle.dumps(self._rng.getstate()),
                 innov_db_body=self._innov_db_body.Serialize(),
@@ -320,7 +315,7 @@ class DbOptimizerState(DbBase):
 
     __tablename__ = "optimizer"
 
-    process_id = sqlalchemy.Column(
+    db_id = sqlalchemy.Column(
         sqlalchemy.Integer,
         nullable=False,
         primary_key=True,

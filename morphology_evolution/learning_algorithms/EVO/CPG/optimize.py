@@ -6,7 +6,7 @@ from random import Random
 
 from .optimizer import Optimizer
 from revolve2.core.database import open_async_database_sqlite
-from revolve2.core.optimization import ProcessIdGen
+from revolve2.core.optimization import DbId
 from revolve2.standard_resources import modular_robots
 from .revde_optimizer import DbRevDEOptimizerIndividual
 from revolve2.core.database.serializers import Ndarray1xnSerializer
@@ -40,16 +40,14 @@ async def main(body, gen, num) -> None:
     rng.seed(42)
 
     # database
-    database = open_async_database_sqlite('database/morph/gen_' + str(gen) + '/database_' + str(num))
+    database = open_async_database_sqlite('database/morph/gen_' + str(gen) + '/database_' + str(num), create=True)
 
-    # process id generator
-    process_id_gen = ProcessIdGen()
-    process_id = process_id_gen.gen()
+    # unique database identifier for optimizer
+    db_id = DbId.root('controllerlearning')
 
     maybe_optimizer = await Optimizer.from_database(
         database=database,
-        process_id=process_id,
-        process_id_gen=process_id_gen,
+        db_id=db_id,
         rng=rng,
         robot_body=body,
         simulation_time=SIMULATION_TIME,
@@ -61,12 +59,11 @@ async def main(body, gen, num) -> None:
         optimizer = maybe_optimizer
     else:
         optimizer = await Optimizer.new(
-            database,
-            process_id,
-            process_id_gen,
-            rng,
-            POPULATION_SIZE,
-            body,
+            database=database,
+            db_id=db_id,
+            rng=rng,
+            population_size=POPULATION_SIZE,
+            robot_body=body,
             simulation_time=SIMULATION_TIME,
             sampling_frequency=SAMPLING_FREQUENCY,
             control_frequency=CONTROL_FREQUENCY,

@@ -3,7 +3,7 @@
 from pyrr import Quaternion, Vector3
 from revolve2.core.modular_robot import ModularRobot
 from .runner_mujoco import LocalRunner
-from .environment_actor_controller import EnvironmentActorController
+from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
 from revolve2.core.physics.running import Batch, Environment, PosedActor
 
 

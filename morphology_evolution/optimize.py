@@ -7,7 +7,7 @@ import multineat
 from genotype import random as random_genotype
 from optimizer import Optimizer
 from revolve2.core.database import open_async_database_sqlite
-from revolve2.core.optimization import ProcessIdGen
+from revolve2.core.optimization import DbId
 
 
 async def main() -> None:
@@ -15,7 +15,7 @@ async def main() -> None:
     # number of initial mutations for body and brain CPPNWIN networks
     NUM_INITIAL_MUTATIONS = 10
 
-    SIMULATION_TIME = 10
+    SIMULATION_TIME = 30
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
@@ -33,11 +33,10 @@ async def main() -> None:
     rng.seed(42)
 
     # database
-    database = open_async_database_sqlite("./database")
+    database = open_async_database_sqlite("./database", create=True)
 
-    # process id generator
-    process_id_gen = ProcessIdGen()
-    process_id = process_id_gen.gen()
+    # unique database identifier for optimizer
+    db_id = DbId.root("morphevo")
 
     # multineat innovation databases
     innov_db_body = multineat.InnovationDatabase()
@@ -50,21 +49,19 @@ async def main() -> None:
 
     maybe_optimizer = await Optimizer.from_database(
         database=database,
-        process_id=process_id,
+        db_id=db_id,
         innov_db_body=innov_db_body,
         innov_db_brain=innov_db_brain,
         rng=rng,
-        process_id_gen=process_id_gen,
     )
     if maybe_optimizer is not None:
         optimizer = maybe_optimizer
     else:
         optimizer = await Optimizer.new(
             database=database,
-            process_id=process_id,
+            db_id=db_id,
             initial_population=initial_population,
             rng=rng,
-            process_id_gen=process_id_gen,
             innov_db_body=innov_db_body,
             innov_db_brain=innov_db_brain,
             simulation_time=SIMULATION_TIME,
