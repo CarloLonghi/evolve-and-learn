@@ -22,7 +22,7 @@ async def main(body, gen, num) -> None:
     """Run the optimization process."""
 
     POPULATION_SIZE = 10
-    NUM_GENERATIONS = 5
+    NUM_GENERATIONS = 10
     SCALING = 0.5
     CROSS_PROB = 0.9
 
@@ -30,17 +30,22 @@ async def main(body, gen, num) -> None:
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s",
-    )
+    # database
+    database = open_async_database_sqlite('database/morph/gen_' + str(gen) + '/database_' + str(num), create=True)
+
+    fileh = logging.FileHandler("database/exp.log")
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")
+    fileh.setFormatter(formatter)
+
+    log = logging.getLogger()  # root logger
+    log.setLevel(logging.INFO)
+    for hdlr in log.handlers[:]:  # remove all old handlers
+        log.removeHandler(hdlr)
+    log.addHandler(fileh)
 
     # random number generator
     rng = Random()
     rng.seed(42)
-
-    # database
-    database = open_async_database_sqlite('database/morph/gen_' + str(gen) + '/database_' + str(num), create=True)
 
     # unique database identifier for optimizer
     db_id = DbId.root('controllerlearning')

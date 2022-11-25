@@ -19,21 +19,26 @@ async def main() -> None:
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
-    POPULATION_SIZE = 10
-    OFFSPRING_SIZE = 10
-    NUM_GENERATIONS = 10
+    POPULATION_SIZE = 100
+    OFFSPRING_SIZE = 100
+    NUM_GENERATIONS = 30
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s",
-    )
+    # database
+    database = open_async_database_sqlite("./database", create=True)
+
+    fileh = logging.FileHandler("database/exp.log")
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(module)s] %(message)s")
+    fileh.setFormatter(formatter)
+
+    log = logging.getLogger()  # root logger
+    log.setLevel(logging.INFO)
+    for hdlr in log.handlers[:]:  # remove all old handlers
+        log.removeHandler(hdlr)
+    log.addHandler(fileh)
 
     # random number generator
     rng = Random()
     rng.seed(42)
-
-    # database
-    database = open_async_database_sqlite("./database", create=True)
 
     # unique database identifier for optimizer
     db_id = DbId.root("morphevo")
