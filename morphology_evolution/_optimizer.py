@@ -43,7 +43,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId
-    ) -> List[Fitness]:
+    ) -> Tuple[List[Fitness], List[Genotype]]:
         """
         Evaluate a list of genotypes.
 
@@ -51,7 +51,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         :param database: Database that can be used to store anything you want to save from the evaluation.
         :param process_id: Unique identifier in the completely program specifically made for this function call.
         :param process_id_gen: Can be used to create more unique identifiers.
-        :returns: The fitness result.
+        :returns: The fitness result and genotype with trained controller.
         """
 
     @abstractmethod
@@ -205,10 +205,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         assert new_opt.id is not None  # this is impossible because it's not nullable
         self.__ea_optimizer_id = new_opt.id
 
-        await self.__save_generation_using_session(
-            session, None, None, self.__latest_population, None
-        )
-
     async def ainit_from_database(
         self,
         database: AsyncEngine,
@@ -353,12 +349,19 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         # evaluate initial population if required
         if self.__latest_fitnesses is None:
             logging.info("Evaluating initial population of morphologies")
-            self.__latest_fitnesses = await self.__safe_evaluate_generation(
+            self.__latest_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
                 self.__database,
                 self.__db_id,
             )
             initial_population = self.__latest_population
+            for i, ind in enumerate(initial_population):
+                ind.genotype = new_genotypes[i]
+            async with AsyncSession(self.__database) as session:
+                async with session.begin():
+                    await self.__save_generation_using_session(
+                        session, None, None, self.__latest_population, None
+                    )
             initial_fitnesses = self.__latest_fitnesses
             logging.info("Finished evaluating initial population of morphologies")
         else:
@@ -389,7 +392,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             ]
 
             # let user evaluate offspring
-            new_fitnesses = await self.__safe_evaluate_generation(
+            new_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 offspring,
                 self.__database,
                 self.__db_id
@@ -402,7 +405,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     genotype,
                     [self.__latest_population[i].id for i in parent_indices],
                 )
-                for parent_indices, genotype in zip(parent_selections, offspring)
+                for parent_indices, genotype in zip(parent_selections, new_genotypes)
             ]
 
             # let user select survivors between old and new individuals
@@ -473,8 +476,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId
-    ) -> List[Fitness]:
-        fitnesses = await self._evaluate_generation(
+    ) -> Tuple[List[Fitness], List[Genotype]]:
+        fitnesses, new_genotypes = await self._evaluate_generation(
             genotypes=genotypes,
             database=database,
             db_id=db_id
@@ -482,7 +485,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         assert type(fitnesses) == list
         assert len(fitnesses) == len(genotypes)
         assert all(type(e) == self.__fitness_type for e in fitnesses)
-        return fitnesses
+        assert type(new_genotypes) == list
+        assert len(new_genotypes) == len(genotypes)
+        assert all(type(e) == self.__genotype_type for e in new_genotypes)
+        return fitnesses, new_genotypes
 
     def __safe_select_parents(
         self,

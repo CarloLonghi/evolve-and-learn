@@ -17,12 +17,6 @@ from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
 from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
     random_v1 as body_random,
 )
-from revolve2.genotypes.cppnwin.modular_robot.brain_genotype_cpg_v1 import (
-    develop_v1 as brain_develop,
-)
-from revolve2.genotypes.cppnwin.modular_robot.brain_genotype_cpg_v1 import (
-    random_v1 as brain_random,
-)
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -205,9 +199,17 @@ def random(
         num_initial_mutations,
     )
 
-    num_hinges = len(body_develop(body).find_active_hinges())
-
-    brain = random_array_genotype(num_hinges ** 2, rng)
+    body_d = body_develop(body)
+    _, dof_ids = body_d.to_actor()
+    active_hinges_unsorted = body_d.find_active_hinges()
+    active_hinge_map = {
+        active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+    }
+    active_hinges = [active_hinge_map[id] for id in dof_ids]
+    cpg_network_structure = make_cpg_network_structure_neighbour(
+        active_hinges
+    )
+    brain = random_array_genotype(cpg_network_structure.num_connections, rng)
 
     return Genotype(body, brain)
 
@@ -233,7 +235,7 @@ def mutate(
 
     return Genotype(
         mutate_v1(genotype.body, _MULTINEAT_PARAMS, innov_db_body, multineat_rng),
-        genotype.brain,
+        ArrayGenotype(genotype.brain.genotype),
     )
 
 
@@ -261,7 +263,7 @@ def crossover(
             False,
             False,
         ),
-        parent1.brain,
+        ArrayGenotype(parent1.brain.genotype),
     )
 
 def _multineat_rng_from_random(rng: Random) -> multineat.RNG:

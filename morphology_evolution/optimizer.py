@@ -253,7 +253,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId,
-    ) -> List[float]:
+    ) -> Tuple[List[float], List[Genotype]]:
         batch = Batch(
             simulation_time=self._simulation_time,
             sampling_frequency=self._sampling_frequency,
@@ -277,7 +277,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 genotypes[body_num].brain.genotype = params
             fitnesses.append(fitness)
 
-        return fitnesses
+        return fitnesses, genotypes
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
