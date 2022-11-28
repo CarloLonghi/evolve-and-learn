@@ -1,7 +1,7 @@
 
 import math
 from random import Random
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -40,6 +40,7 @@ class Optimizer(RevDEOptimizer):
     _control_frequency: float
 
     _num_generations: int
+    _target_point: Tuple[float]
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -103,6 +104,7 @@ class Optimizer(RevDEOptimizer):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
+        self._target_point = np.random.uniform(low=1, high=10, size=2)
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -224,20 +226,28 @@ class Optimizer(RevDEOptimizer):
                 self._calculate_fitness(
                     environment_result.environment_states[0].actor_states[0],
                     environment_result.environment_states[-1].actor_states[0],
+                    self._target_point
                 )
                 for environment_result in batch_results.environment_results
             ]
         )
 
     @staticmethod
-    def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
+    def _calculate_fitness(begin_state: ActorState, end_state: ActorState, target_point) -> float:
         # TODO simulation can continue slightly passed the defined sim time.
 
         # distance traveled on the xy plane
-        return math.sqrt(
-            (begin_state.position[0] - end_state.position[0]) ** 2
-            + ((begin_state.position[1] - end_state.position[1]) ** 2)
+        initial_d = math.sqrt(
+            (begin_state.position[0] - target_point[0]) ** 2
+            + ((begin_state.position[1] - target_point[1]) ** 2)
         )
+
+        final_d = math.sqrt(
+            (end_state.position[0] - target_point[0]) ** 2
+            + ((end_state.position[1] - target_point[1]) ** 2)
+        )
+
+        return initial_d - final_d
 
     def _must_do_next_gen(self) -> bool:
         return self.generation_number != self._num_generations
