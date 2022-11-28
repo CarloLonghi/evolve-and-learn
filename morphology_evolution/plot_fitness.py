@@ -41,9 +41,17 @@ def plot(database: str, db_id: DbId) -> None:
         ),
         db,
     )
+    describe = (
+        df[["generation_index", "value"]]
+        .groupby(by="generation_index")
+        .describe()["value"]
+    )
+    mean = describe[["mean"]].values.squeeze()
+    std = describe[["std"]].values.squeeze()
 
-    fitnesses = df[['generation_index','individual_index','individual_id', 'value']].sort_values(by=["generation_index", "individual_index"])
-    plt.plot(np.linspace(start=1, stop=fitnesses.shape[0], num=fitnesses.shape[0]), fitnesses['value'])
+    # plot max min mean, std
+    describe[["max", "mean", "min"]].plot()
+    plt.fill_between(range(len(mean)), mean - std, mean + std)
     plt.show()
 
 
