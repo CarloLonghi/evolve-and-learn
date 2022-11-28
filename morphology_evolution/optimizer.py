@@ -228,13 +228,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
             old_fitnesses,
             new_individuals,
             new_fitnesses,
-            lambda n, genotypes, fitnesses: selection.multiple_unique(
-                n,
-                genotypes,
-                fitnesses,
-                lambda genotypes, fitnesses: selection.tournament(
-                    self._rng, fitnesses, k=2
-                ),
+            lambda num_survivors, genotypes, fitnesses: selection.topn(
+                    num_survivors, genotypes,fitnesses
             ),
         )
 
