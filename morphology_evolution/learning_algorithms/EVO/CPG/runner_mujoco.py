@@ -287,6 +287,19 @@ class LocalRunner(Runner):
         )
         env_mjcf.visual.headlight.active = 0
 
+        # add target points markers
+        target_points = [(0.5,1.0),(0.5,-0.3),(0,-2.0)]
+        for i, point in enumerate(target_points):
+            env_mjcf.worldbody.add(
+                "geom",
+                name="target_point_"+str(i),
+                pos=[point[0], point[1], 0.0],
+                size=[0.1, 0.1, 0.1],
+                type="plane",
+                condim=1,
+                rgba="1. 0. 0. 1.",
+            )
+
         for actor_index, posed_actor in enumerate(env_descr.actors):
             urdf = physbot_to_urdf(
                 posed_actor.actor,

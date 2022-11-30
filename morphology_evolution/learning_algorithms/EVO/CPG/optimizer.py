@@ -224,30 +224,47 @@ class Optimizer(RevDEOptimizer):
         return np.array(
             [
                 self._calculate_fitness(
-                    environment_result.environment_states[0].actor_states[0],
-                    environment_result.environment_states[-1].actor_states[0],
-                    self._target_point
+                    environment_result
                 )
                 for environment_result in batch_results.environment_results
             ]
         )
 
     @staticmethod
-    def _calculate_fitness(begin_state: ActorState, end_state: ActorState, target_point) -> float:
-        # TODO simulation can continue slightly passed the defined sim time.
+    def _calculate_fitness(results) -> float:
+        target_points = [(0.5,1.0),(0.5,-0.3),(0,-2.0)]
+        target_range = 0.2
+        reached_target_counter = 0
 
-        # distance traveled on the xy plane
-        initial_d = math.sqrt(
-            (begin_state.position[0] - target_point[0]) ** 2
-            + ((begin_state.position[1] - target_point[1]) ** 2)
-        )
+        coordinates = [env_state.actor_states[0].position[:2] for env_state in results.environment_states]
+        for state in coordinates:
+            if Optimizer._check_target(state, target_points[reached_target_counter], target_range):
+                reached_target_counter += 1
 
-        final_d = math.sqrt(
-            (end_state.position[0] - target_point[0]) ** 2
-            + ((end_state.position[1] - target_point[1]) ** 2)
-        )
+        if reached_target_counter == 3:
+            return 3.0
+        else:
+            if reached_target_counter == 0:
+                last_target = (0.0, 0.0)
+            else:
+                last_target = target_points[reached_target_counter-1]
+            last_coord = coordinates[-1]
+            distance = math.sqrt(
+                (target_points[reached_target_counter][0] - last_target[0]) **2 +
+                (target_points[reached_target_counter][1] - last_target[1]) **2
+            )
+            distance -= math.sqrt(
+                (target_points[reached_target_counter][0] - last_coord[0]) **2 +
+                (target_points[reached_target_counter][1] - last_coord[1]) **2
+            )
+            return reached_target_counter + distance
 
-        return initial_d - final_d
+    @staticmethod
+    def _check_target(coord, target, target_range):
+        if abs(coord[0]-target[0]) < target_range and abs(coord[1]-target[1]) < target_range:
+            return True
+        else:
+            return False
 
     def _must_do_next_gen(self) -> bool:
         return self.generation_number != self._num_generations
