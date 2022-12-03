@@ -5,7 +5,7 @@ from revolve2.core.modular_robot import ModularRobot
 from .runner_mujoco import LocalRunner
 from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
 from revolve2.core.physics.running import Batch, Environment, PosedActor
-
+import math
 
 class ModularRobotRerunner:
     """Rerunner for a single robot that uses Mujoco."""
@@ -18,14 +18,14 @@ class ModularRobotRerunner:
         :param control_frequency: Control frequency for the simulation. See `Batch` class from physics running.
         """
         batch = Batch(
-            simulation_time=1000000,
-            sampling_frequency=0.0001,
+            simulation_time=30,
+            sampling_frequency=5,
             control_frequency=control_frequency,
         )
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment(EnvironmentActorController(self._controller))
+        env = Environment(EnvironmentActorController(self._controller, [(-1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]))
         env.actors.append(
             PosedActor(
                 actor,

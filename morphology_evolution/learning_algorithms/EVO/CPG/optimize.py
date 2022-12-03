@@ -106,4 +106,20 @@ async def main(body, gen, num) -> None:
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "body",
+        type=str,
+        help="The body of the robot.",
+    )
+    parser.add_argument(
+        "num",
+        type=str,
+        help="The number of the experiment",
+    )
+    args = parser.parse_args()
+    body = args.body
+    num = args.num
+    body = modular_robots.get(body)
+
+    asyncio.run(main(body, 0, num))

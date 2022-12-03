@@ -13,7 +13,7 @@ from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from revolve2.core.optimization import DbId
 from revolve2.core.physics.actor import Actor
-from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
+from .environment_actor_controller import EnvironmentActorController
 from revolve2.core.physics.running import (ActorState, Batch,
                                            Environment, PosedActor, Runner)
 from .runner_mujoco import LocalRunner
@@ -40,7 +40,7 @@ class Optimizer(RevDEOptimizer):
     _control_frequency: float
 
     _num_generations: int
-    _target_point: Tuple[float]
+    _target_points: List[Tuple[float]]
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -104,7 +104,7 @@ class Optimizer(RevDEOptimizer):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
-        self._target_point = np.random.uniform(low=1, high=10, size=2)
+        self._target_points = [(-1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -202,7 +202,7 @@ class Optimizer(RevDEOptimizer):
             controller = brain.make_controller(self._body, self._dof_ids)
 
             bounding_box = self._actor.calc_aabb()
-            env = Environment(EnvironmentActorController(controller))
+            env = Environment(EnvironmentActorController(controller, self._target_points))
             env.actors.append(
                 PosedActor(
                     self._actor,
@@ -224,40 +224,37 @@ class Optimizer(RevDEOptimizer):
         return np.array(
             [
                 self._calculate_fitness(
-                    environment_result
+                    environment_result, self._target_points
                 )
                 for environment_result in batch_results.environment_results
             ]
         )
 
     @staticmethod
-    def _calculate_fitness(results) -> float:
-        target_points = [(0.5,1.0),(0.5,-0.3),(0,-2.0)]
+    def _calculate_fitness(results, target_points) -> float:
+        trajectory = [(0.0, 0.0)] + target_points
+        distances = [Optimizer._compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
         target_range = 0.2
         reached_target_counter = 0
 
         coordinates = [env_state.actor_states[0].position[:2] for env_state in results.environment_states]
         for state in coordinates:
-            if Optimizer._check_target(state, target_points[reached_target_counter], target_range):
+            if reached_target_counter < 0 and Optimizer._check_target(state, target_points[reached_target_counter], target_range):
                 reached_target_counter += 1
+        
+        fitness = sum(distances[:reached_target_counter])
 
         if reached_target_counter == 3:
-            return 3.0
+            return fitness
         else:
             if reached_target_counter == 0:
                 last_target = (0.0, 0.0)
             else:
                 last_target = target_points[reached_target_counter-1]
             last_coord = coordinates[-1]
-            distance = math.sqrt(
-                (target_points[reached_target_counter][0] - last_target[0]) **2 +
-                (target_points[reached_target_counter][1] - last_target[1]) **2
-            )
-            distance -= math.sqrt(
-                (target_points[reached_target_counter][0] - last_coord[0]) **2 +
-                (target_points[reached_target_counter][1] - last_coord[1]) **2
-            )
-            return reached_target_counter + distance
+            distance = Optimizer._compute_distance(target_points[reached_target_counter], last_target)
+            distance -= Optimizer._compute_distance(target_points[reached_target_counter], last_coord)
+            return fitness + distance
 
     @staticmethod
     def _check_target(coord, target, target_range):
@@ -265,6 +262,13 @@ class Optimizer(RevDEOptimizer):
             return True
         else:
             return False
+
+    @staticmethod
+    def _compute_distance(point_a, point_b):
+        return math.sqrt(
+            (point_a[0] - point_b[0]) ** 2 +
+            (point_a[1] - point_b[1]) ** 2
+        )
 
     def _must_do_next_gen(self) -> bool:
         return self.generation_number != self._num_generations
