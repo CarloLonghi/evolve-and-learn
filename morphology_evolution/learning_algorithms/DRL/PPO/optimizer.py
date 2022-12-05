@@ -16,6 +16,7 @@ from revolve2.core.modular_robot import Body
 from revolve2.core.physics.actor import Actor
 from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
                                            Environment, PosedActor, Runner)
+from environment_actor_controller import EnvironmentActorController
 from runner_train_mujoco import LocalRunnerTrain
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -51,7 +52,6 @@ class PPOOptimizer():
 
         self._visualize = visualize
         print("torch" in sys.modules)
-        self._init_runner()
         self._rng = rng
         self._simulation_time = simulation_time
         self._sampling_frequency = sampling_frequency
@@ -60,15 +60,10 @@ class PPOOptimizer():
         self._body = robot_body
         self._actor, self._dof_ids = self._body.to_actor()
         self._file_path = file_path
+        self._init_runner()
 
     def _init_runner(self) -> None:
-        self._runner = LocalRunnerTrain(headless=(not self._visualize))
-
-    def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
-        action, value, logp = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.tanh(action)*ACTION_CONSTRAINT)
-        # controller.train() TODO
-        return action.tolist(), value.item(), logp.item()
+        self._runner = LocalRunnerTrain(headless=(not self._visualize), num_simulators=self._num_agents)
 
     async def train(self, from_checkpoint: bool = False):
         """
@@ -97,13 +92,12 @@ class PPOOptimizer():
                 simulation_time=self._simulation_time,
                 sampling_frequency=self._sampling_frequency,
                 control_frequency=self._control_frequency,
-                control=self._control,
             )
 
             # insert agents in the simulation environment
             bounding_box = self._actor.calc_aabb()
             for _ in range(self._num_agents):
-                env = Environment()
+                env = Environment(EnvironmentActorController(self._controller))
                 env.actors.append(
                     PosedActor(
                         self._actor,

@@ -10,6 +10,7 @@ from revolve2.core.modular_robot import Body, ModularRobot
 from revolve2.core.physics.running import (ActorControl, Batch, Environment,
                                            PosedActor)
 from runner_mujoco import LocalRunner
+from environment_actor_controller import EnvironmentActorController
 
 
 class AgentRerunner:
@@ -24,7 +25,6 @@ class AgentRerunner:
             simulation_time=SIMULATION_TIME,
             sampling_frequency=SAMPLING_FREQUENCY,
             control_frequency=CONTROL_FREQUENCY,
-            control=self._control,
         )
 
         self._body = body
@@ -33,7 +33,7 @@ class AgentRerunner:
         self._controller = brain.make_controller(self._body, self._dof_ids, file_path)
 
         bounding_box = self._actor.calc_aabb()
-        env = Environment()
+        env = Environment(EnvironmentActorController(self._controller))
         env.actors.append(
             PosedActor(
                 self._actor,
@@ -45,11 +45,7 @@ class AgentRerunner:
         batch.environments.append(env)
 
         runner = LocalRunner()
-        await runner.run_batch(batch, )
-
-    def _control(self, environment_index: int, dt: float, control: ActorControl, observations) -> None:
-        action, _, _ = self._controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.clip(action, -ACTION_CONSTRAINT, ACTION_CONSTRAINT))
+        await runner.run_batch(batch,self._controller,1)
 
 
 if __name__ == "__main__":
