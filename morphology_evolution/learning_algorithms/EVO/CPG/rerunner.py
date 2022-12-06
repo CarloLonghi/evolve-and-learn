@@ -3,9 +3,11 @@
 from pyrr import Quaternion, Vector3
 from revolve2.core.modular_robot import ModularRobot
 from .runner_mujoco import LocalRunner
+#from .environment_steering_controller import EnvironmentActorController
 from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
 from revolve2.core.physics.running import Batch, Environment, PosedActor
 import math
+from revolve2.core.physics.running import RecordSettings
 
 class ModularRobotRerunner:
     """Rerunner for a single robot that uses Mujoco."""
@@ -25,7 +27,7 @@ class ModularRobotRerunner:
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment(EnvironmentActorController(self._controller, [(-1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]))
+        env = Environment(EnvironmentActorController(self._controller))
         env.actors.append(
             PosedActor(
                 actor,
@@ -37,7 +39,7 @@ class ModularRobotRerunner:
         batch.environments.append(env)
 
         runner = LocalRunner(headless=False)
-        await runner.run_batch(batch)
+        await runner.run_batch(batch,)
 
 if __name__ == "__main__":
     print(

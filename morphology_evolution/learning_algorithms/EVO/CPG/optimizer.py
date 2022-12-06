@@ -13,7 +13,8 @@ from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from revolve2.core.optimization import DbId
 from revolve2.core.physics.actor import Actor
-from .environment_actor_controller import EnvironmentActorController
+#from .environment_steering_controller import EnvironmentActorController
+from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
 from revolve2.core.physics.running import (ActorState, Batch,
                                            Environment, PosedActor, Runner)
 from .runner_mujoco import LocalRunner
@@ -202,7 +203,7 @@ class Optimizer(RevDEOptimizer):
             controller = brain.make_controller(self._body, self._dof_ids)
 
             bounding_box = self._actor.calc_aabb()
-            env = Environment(EnvironmentActorController(controller, self._target_points))
+            env = Environment(EnvironmentActorController(controller))
             env.actors.append(
                 PosedActor(
                     self._actor,
@@ -223,15 +224,15 @@ class Optimizer(RevDEOptimizer):
 
         return np.array(
             [
-                self._calculate_fitness(
-                    environment_result, self._target_points
+                self._calculate_panoramic_rotation(
+                    environment_result
                 )
                 for environment_result in batch_results.environment_results
             ]
         )
 
     @staticmethod
-    def _calculate_fitness(results, target_points) -> float:
+    def _calculate_point_navigation(results, target_points) -> float:
         trajectory = [(0.0, 0.0)] + target_points
         distances = [Optimizer._compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
         target_range = 0.2
@@ -255,6 +256,26 @@ class Optimizer(RevDEOptimizer):
             distance = Optimizer._compute_distance(target_points[reached_target_counter], last_target)
             distance -= Optimizer._compute_distance(target_points[reached_target_counter], last_coord)
             return fitness + distance
+
+    @staticmethod
+    def _calculate_panoramic_rotation(results, vertical_angle_limi = math.pi/4) -> float:
+        total_angle = 0.0
+
+        orientations = [env_state.actor_states[0].orientation for env_state in results.environment_states[1:]]
+        orientations = [Optimizer._from_quaternion_to_axisangle(o)[0] for o in orientations]
+
+        total_angle = abs(sum([o for o in orientations]))
+
+        return total_angle
+
+    @staticmethod
+    def _from_quaternion_to_axisangle(rotation: Quaternion):
+        theta = 2 * math.acos(rotation.w)
+        x = rotation.x / math.sin(theta/2)
+        y = rotation.y / math.sin(theta/2)
+        z = rotation.z / math.sin(theta/2)
+        return x,y,z
+
 
     @staticmethod
     def _check_target(coord, target, target_range):

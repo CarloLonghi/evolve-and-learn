@@ -142,7 +142,8 @@ class LocalRunner(Runner):
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
+                #env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
+                env_descr.controller.control(control_step, control_user)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
