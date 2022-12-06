@@ -1,11 +1,13 @@
-import logging
 import argparse
+import logging
+from random import Random
+
+from config import (CONTROL_FREQUENCY, NUM_PARALLEL_AGENT, SAMPLING_FREQUENCY,
+                    SIMULATION_TIME)
+from optimizer import PPOOptimizer
+from revolve2.standard_resources import modular_robots
 import os
 
-from optimizer import SACOptimizer 
-from random import Random
-from config import NUM_PARALLEL_AGENT, SAMPLING_FREQUENCY, CONTROL_FREQUENCY, SIMULATION_TIME
-from revolve2.standard_resources import modular_robots
 
 async def main() -> None:
 
@@ -34,7 +36,7 @@ async def main() -> None:
     body = args.body
     num = args.num
 
-    file_path = "./test/SAC/"+body+"/database"+num
+    file_path = "./test/PPO/"+body+"/database"+num
     os.makedirs(file_path, exist_ok=True)
 
     fileh = logging.FileHandler(file_path+"/exp.log", mode='w')
@@ -55,7 +57,7 @@ async def main() -> None:
 
     body = modular_robots.get(body)
 
-    optimizer = SACOptimizer(
+    optimizer = PPOOptimizer(
         rng=rng,
         sampling_frequency=SAMPLING_FREQUENCY,
         control_frequency=CONTROL_FREQUENCY,
@@ -63,7 +65,7 @@ async def main() -> None:
         visualize=args.visualize,
         num_agents=NUM_PARALLEL_AGENT,
         robot_body=body,
-        file_path = file_path,
+        file_path = file_path
     )
 
     logging.info("Starting learning process..")

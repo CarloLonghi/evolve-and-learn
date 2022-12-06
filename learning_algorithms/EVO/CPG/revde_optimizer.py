@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from mimetypes import init
 from random import Random
 from typing import List, Optional
-import torch
 
 import numpy as np
 import numpy.typing as npt
@@ -14,7 +13,7 @@ from revolve2.actor_controllers.cpg import CpgNetworkStructure
 from revolve2.core.database import IncompatibleError
 from revolve2.core.database.serializers import (DbNdarray1xn, FloatSerializer,
                                                 Ndarray1xnSerializer)
-from revolve2.core.optimization import Process, ProcessIdGen
+from revolve2.core.optimization import DbId, Process
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -35,16 +34,14 @@ class RevDEOptimizer(ABC, Process):
     async def _evaluate_population(
         self,
         database: AsyncEngine,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         population: npt.NDArray[np.float_],
     ) -> npt.NDArray[np.float_]:
         """
         Evaluate all individuals in the population, returning their fitnesses.
 
         :param database: Database that can be used to store anything you want to save from the evaluation.
-        :param process_id: Unique identifier in the completely program specifically made for this function call.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this function call.
         :param population: MxN array with M the population size and N the size of an individual.
         :returns: M long vector with M the population size, representing the fitness of each individual in `population`.
         """
@@ -58,8 +55,8 @@ class RevDEOptimizer(ABC, Process):
         """
 
     __database: AsyncEngine
-    __process_id: int
-    __process_id_gen: ProcessIdGen
+    __db_id: DbId
+    __ea_optimizer_id: int
 
     __rng: Random
 
@@ -77,8 +74,7 @@ class RevDEOptimizer(ABC, Process):
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         rng: Random,
         population_size: int,
         initial_population: List[np.float_],
@@ -92,8 +88,7 @@ class RevDEOptimizer(ABC, Process):
 
         :param database: Database to use for this optimizer.
         :param session: Session to use when saving data to the database during initialization.
-        :param process_id: Unique identifier in the completely program specifically made for this optimizer.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this optimizer.
         :param rng: Random number generator used in the complete optimization process.
         :param population_size: Size of the population. OpenAI ES parameter.
         :param sigma: Standard deviation. OpenAI ES parameter.
@@ -101,9 +96,7 @@ class RevDEOptimizer(ABC, Process):
         :param initial_mean: Nx1 array. Initial guess. OpenAI ES Parameter.
         """
         self.__database = database
-        self.__process_id = process_id
-        self.__process_id_gen = process_id_gen
-
+        self.__db_id = db_id
         self.__rng = rng
 
         self.__population_size = population_size
@@ -126,20 +119,22 @@ class RevDEOptimizer(ABC, Process):
         await FloatSerializer.create_tables(session)
 
         dbopt = DbRevDEOptimizer(
-            process_id=self.__process_id,
+            db_id=db_id.fullname,
             population_size=self.__population_size,
             initial_rng=pickle.dumps(self.__rng.getstate()),
             scaling=scaling,
             cross_prob=cross_prob,
         )
         session.add(dbopt)
+        await session.flush()
+        assert dbopt.id is not None  # this is impossible because it's not nullable
+        self.__ea_optimizer_id = dbopt.id
 
     async def ainit_from_database(
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         rng: Random,
     ) -> bool:
         """
@@ -149,22 +144,20 @@ class RevDEOptimizer(ABC, Process):
 
         :param database: Database to use for this optimizer.
         :param session: Session to use when loading and saving data to the database during initialization.
-        :param process_id: Unique identifier in the completely program specifically made for this optimizer.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this optimizer.
         :param rng: Random number generator used in the complete optimization process. Its state will be overwritten with the serialized state from the database.
         :returns: True if the complete object could be deserialized from the database.
         :raises IncompatibleError: In case the database is not compatible with this class.
         """
         self.__database = database
-        self.__process_id = process_id
-        self.__process_id_gen = process_id_gen
+        self.__db_id = db_id
 
         try:
             opt_row = (
                 (
                     await session.execute(
                         select(DbRevDEOptimizer).filter(
-                            DbRevDEOptimizer.process_id == self.__process_id
+                            DbRevDEOptimizer.db_id == self.__db_id.fullname
                         )
                     )
                 )
@@ -176,6 +169,7 @@ class RevDEOptimizer(ABC, Process):
         except (NoResultFound, OperationalError):
             return False
 
+        self.__ea_optimizer_id = opt_row.id
         self.__population_size = opt_row.population_size
         self.__scaling = opt_row.scaling
         self.__cross_prob = opt_row.cross_prob
@@ -190,7 +184,7 @@ class RevDEOptimizer(ABC, Process):
             (
                 await session.execute(
                     select(DbRevDEOptimizerState)
-                    .filter(DbRevDEOptimizerState.process_id == self.__process_id)
+                    .filter(DbRevDEOptimizerState.ea_optimizer_id == self.__ea_optimizer_id)
                     .order_by(DbRevDEOptimizerState.gen_num.desc())
                 )
             )
@@ -209,8 +203,8 @@ class RevDEOptimizer(ABC, Process):
                     select(DbRevDEOptimizerGeneration)
                     .filter(
                         (
-                            DbRevDEOptimizerGeneration.process_id
-                            == self.__process_id
+                            DbRevDEOptimizerGeneration.ea_optimizer_id
+                            == self.__ea_optimizer_id
                         )
                         & (
                             DbRevDEOptimizerGeneration.gen_num
@@ -231,8 +225,8 @@ class RevDEOptimizer(ABC, Process):
                 await session.execute(
                     select(DbRevDEOptimizerBestIndividual).filter(
                         (
-                            DbRevDEOptimizerBestIndividual.process_id
-                            == self.__process_id
+                            DbRevDEOptimizerBestIndividual.ea_optimizer_id
+                            == self.__ea_optimizer_id
                         )
                         & (DbRevDEOptimizerBestIndividual.individual.in_(generation_ids))
                     )
@@ -260,8 +254,7 @@ class RevDEOptimizer(ABC, Process):
         if self.generation_number == 0:
             fitnesses = await self._evaluate_population(
                 self.__database,
-                self.__process_id_gen.gen(),
-                self.__process_id_gen,
+                self.__db_id.branch(f"evaluate{self.__gen_num}"),
                 self.__latest_population,
             )
             assert fitnesses.shape == (len(self.__latest_population),)
@@ -273,7 +266,7 @@ class RevDEOptimizer(ABC, Process):
                     # save current optimizer state
                     session.add(
                         DbRevDEOptimizerState(
-                            process_id=self.__process_id,
+                            ea_optimizer_id=self.__ea_optimizer_id,
                             gen_num=self.__gen_num,
                             rng=pickle.dumps(self.__rng.getstate()),
                         )
@@ -291,7 +284,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerIndividual(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual=id,
@@ -315,7 +308,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerBestIndividual(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual=id,
@@ -330,7 +323,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerGeneration(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual_id=individual_id,
@@ -338,7 +331,7 @@ class RevDEOptimizer(ABC, Process):
                             for index, individual_id in enumerate(db_generation_ids)
                         ]
                     )
-                    logging.info(f"Finished generation {self.__gen_num}")
+                    logging.info(f"Finished controller generation {self.__gen_num}")
                     self.__gen_num += 1
 
         while self.__safe_must_do_next_gen():
@@ -347,12 +340,10 @@ class RevDEOptimizer(ABC, Process):
             )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
 
             candidates = self.proposal(self.__latest_population)
-            candidates = torch.from_numpy(candidates).float()
 
             fitnesses = await self._evaluate_population(
                 self.__database,
-                self.__process_id_gen.gen(),
-                self.__process_id_gen,
+                self.__db_id.branch(f"evaluate{self.__gen_num}"),
                 candidates,
             )
 
@@ -368,7 +359,7 @@ class RevDEOptimizer(ABC, Process):
                     # save current optimizer state
                     session.add(
                         DbRevDEOptimizerState(
-                            process_id=self.__process_id,
+                            ea_optimizer_id=self.__ea_optimizer_id,
                             gen_num=self.__gen_num,
                             rng=pickle.dumps(self.__rng.getstate()),
                         )
@@ -386,7 +377,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerIndividual(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual=id,
@@ -410,7 +401,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerBestIndividual(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual=id,
@@ -425,7 +416,7 @@ class RevDEOptimizer(ABC, Process):
                     session.add_all(
                         [
                             DbRevDEOptimizerGeneration(
-                                process_id=self.__process_id,
+                                ea_optimizer_id=self.__ea_optimizer_id,
                                 gen_num=self.__gen_num,
                                 gen_index=index,
                                 individual_id=individual_id,
@@ -433,7 +424,7 @@ class RevDEOptimizer(ABC, Process):
                             for index, individual_id in enumerate(db_generation_ids)
                         ]
                     )
-                    logging.info(f"Finished generation {self.__gen_num}")
+                    logging.info(f"Finished controller generation {self.__gen_num}")
                     self.__gen_num += 1
 
     def proposal(self, theta):
@@ -478,12 +469,13 @@ class DbRevDEOptimizer(DbBase):
 
     __tablename__ = "revde_optimizer"
 
-    process_id = sqlalchemy.Column(
+    id = sqlalchemy.Column(
         sqlalchemy.Integer,
         nullable=False,
         unique=True,
         primary_key=True,
     )
+    db_id = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
     population_size = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
     initial_rng = sqlalchemy.Column(sqlalchemy.PickleType, nullable=False)
     scaling = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
@@ -494,7 +486,7 @@ class DbRevDEOptimizerState(DbBase):
 
     __tablename__ = "revde_optimizer_state"
 
-    process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    ea_optimizer_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     rng = sqlalchemy.Column(sqlalchemy.PickleType, nullable=False)
 
@@ -503,7 +495,7 @@ class DbRevDEOptimizerIndividual(DbBase):
 
     __tablename__ = "revde_optimizer_individual"
 
-    process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    ea_optimizer_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     individual = sqlalchemy.Column(
@@ -516,7 +508,7 @@ class DbRevDEOptimizerBestIndividual(DbBase):
 
     __tablename__ = "revde_optimizer_best_individual"
 
-    process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    ea_optimizer_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     individual = sqlalchemy.Column(
@@ -529,7 +521,7 @@ class DbRevDEOptimizerGeneration(DbBase):
 
     __tablename__ = "ea_optimizer_generation"
 
-    process_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
+    ea_optimizer_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_index = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     individual_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)

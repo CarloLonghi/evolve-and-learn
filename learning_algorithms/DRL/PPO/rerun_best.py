@@ -20,7 +20,7 @@ async def main() -> None:
     body = args.body
     num = args.num
 
-    file_path = "./data/SAC/"+body+"/database"+num
+    file_path = "./test/PPO/"+body+"/database"+num
 
     rerunner = AgentRerunner()
     body = modular_robots.get(body)

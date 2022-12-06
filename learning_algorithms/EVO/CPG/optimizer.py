@@ -1,27 +1,26 @@
 
 import math
 from random import Random
-from typing import List
-import torch
+from typing import List, Tuple
 
 import numpy as np
 import numpy.typing as npt
 from pyrr import Quaternion, Vector3
-from brain import RevDENNbrain
 from revde_optimizer import RevDEOptimizer
-from revolve2.actor_controller import ActorController
 from revolve2.actor_controllers.cpg import CpgNetworkStructure
 from revolve2.core.modular_robot import Body
-from revolve2.core.optimization import ProcessIdGen
+from revolve2.core.modular_robot.brains import (
+    BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
+from revolve2.core.optimization import DbId
 from revolve2.core.physics.actor import Actor
-from revolve2.core.physics.running import (ActorControl, ActorState, Batch,
+#from environment_steering_controller import EnvironmentActorController
+from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
+
+from revolve2.core.physics.running import (ActorState, Batch,
                                            Environment, PosedActor, Runner)
 from runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
-
-from network import Actor
-from config import ACTION_CONSTRAINT, NUM_OBS_TIMES
 
 
 class Optimizer(RevDEOptimizer):
@@ -34,23 +33,22 @@ class Optimizer(RevDEOptimizer):
     _body: Body
     _actor: Actor
     _dof_ids: List[int]
-    _network_structure: CpgNetworkStructure
+    _cpg_network_structure: CpgNetworkStructure
 
     _runner: Runner
-    _controllers: List[ActorController]
 
     _simulation_time: int
     _sampling_frequency: float
     _control_frequency: float
 
     _num_generations: int
+    _target_points: List[Tuple[float]]
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         rng: Random,
         population_size: int,
         robot_body: Body,
@@ -68,8 +66,7 @@ class Optimizer(RevDEOptimizer):
 
         :param database: Database to use for this optimizer.
         :param session: Session to use when saving data to the database during initialization.
-        :param process_id: Unique identifier in the completely program specifically made for this optimizer.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this optimizer.
         :param rng: Random number generator.
         :param population_size: Population size for the OpenAI ES algorithm.
         :param sigma: Standard deviation for the OpenAI ES algorithm.
@@ -81,18 +78,21 @@ class Optimizer(RevDEOptimizer):
         :param num_generations: Number of generation to run the optimizer for.
         """
         self._body = robot_body
-        self._init_actor_and_network_structure()
+        self._init_actor_and_cpg_network_structure()
 
-        parameters = self._network_structure.parameters()
-        vector = torch.nn.utils.parameters_to_vector(parameters)
-        range = 1.0
-        initial_population = (-range - range) * torch.rand((population_size, vector.shape[0])) + range
+        nprng = np.random.Generator(
+            np.random.PCG64(rng.randint(0, 2**63))
+        )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
+
+        nprng = np.random.Generator(
+            np.random.PCG64(rng.randint(0, 2**63))
+        )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
+        initial_population = nprng.standard_normal((population_size, self._cpg_network_structure.num_connections))
 
         await super().ainit_new(
             database=database,
             session=session,
-            process_id=process_id,
-            process_id_gen=process_id_gen,
+            db_id=db_id,
             rng=rng,
             population_size=population_size,
             initial_population=initial_population,
@@ -100,19 +100,19 @@ class Optimizer(RevDEOptimizer):
             cross_prob=cross_prob,
         )
 
-        self._init_runner()
+        self._runner = self._init_runner()
 
         self._simulation_time = simulation_time
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
+        self._target_points = [(-1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
         database: AsyncEngine,
         session: AsyncSession,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         rng: Random,
         robot_body: Body,
         simulation_time: int,
@@ -127,8 +127,7 @@ class Optimizer(RevDEOptimizer):
 
         :param database: Database to use for this optimizer.
         :param session: Session to use when loading and saving data to the database during initialization.
-        :param process_id: Unique identifier in the completely program specifically made for this optimizer.
-        :param process_id_gen: Can be used to create more unique identifiers.
+        :param db_id: Unique identifier in the completely program specifically made for this optimizer.
         :param rng: Random number generator.
         :param robot_body: The body to optimize the brain for.
         :param simulation_time: Time in second to simulate the robots for.
@@ -140,16 +139,15 @@ class Optimizer(RevDEOptimizer):
         if not await super().ainit_from_database(
             database=database,
             session=session,
-            process_id=process_id,
-            process_id_gen=process_id_gen,
+            db_id=db_id,
             rng=rng,
         ):
             return False
 
         self._body = robot_body
-        self._init_actor_and_network_structure()
+        self._init_actor_and_cpg_network_structure()
 
-        self._init_runner()
+        self._runner = self._init_runner()
 
         self._simulation_time = simulation_time
         self._sampling_frequency = sampling_frequency
@@ -158,7 +156,7 @@ class Optimizer(RevDEOptimizer):
 
         return True
 
-    def _init_actor_and_network_structure(self) -> None:
+    def _init_actor_and_cpg_network_structure(self) -> None:
         self._actor, self._dof_ids = self._body.to_actor()
         active_hinges_unsorted = self._body.find_active_hinges()
         active_hinge_map = {
@@ -166,38 +164,47 @@ class Optimizer(RevDEOptimizer):
         }
         active_hinges = [active_hinge_map[id] for id in self._dof_ids]
 
-        actor = Actor((len(active_hinges)*NUM_OBS_TIMES, 4,), len(active_hinges))
+        self._cpg_network_structure = make_cpg_network_structure_neighbour(
+            active_hinges
+        )
 
-        self._network_structure = actor
-
-    def _init_runner(self) -> None:
-        self._runner = LocalRunner(headless=True)
+    def _init_runner(self, num_simulators: int = 1) -> None:
+        return LocalRunner(headless=True, num_simulators=num_simulators)
 
     async def _evaluate_population(
         self,
         database: AsyncEngine,
-        process_id: int,
-        process_id_gen: ProcessIdGen,
+        db_id: DbId,
         population: npt.NDArray[np.float_],
     ) -> npt.NDArray[np.float_]:
         batch = Batch(
             simulation_time=self._simulation_time,
             sampling_frequency=self._sampling_frequency,
             control_frequency=self._control_frequency,
-            control=self._control,
         )
 
-        self._controllers = []
+        self._runner = self._init_runner(population.shape[0])
 
         for params in population:
-            
-            brain = RevDENNbrain()
+            initial_state = self._cpg_network_structure.make_uniform_state(
+                0.5 * math.pi / 2.0
+            )
+            weight_matrix = (
+                self._cpg_network_structure.make_connection_weights_matrix_from_params(
+                    params
+                )
+            )
+            dof_ranges = self._cpg_network_structure.make_uniform_dof_ranges(1.0)
+            brain = BrainCpgNetworkStatic(
+                initial_state,
+                self._cpg_network_structure.num_cpgs,
+                weight_matrix,
+                dof_ranges,
+            )
             controller = brain.make_controller(self._body, self._dof_ids)
-            controller.load_parameters(params)
 
             bounding_box = self._actor.calc_aabb()
-            self._controllers.append(controller)
-            env = Environment()
+            env = Environment(EnvironmentActorController(controller))
             env.actors.append(
                 PosedActor(
                     self._actor,
@@ -209,7 +216,7 @@ class Optimizer(RevDEOptimizer):
                         ]
                     ),
                     Quaternion(),
-                    [0.0 for _ in range(len(self._dof_ids))],
+                    [0.0 for _ in controller.get_dof_targets()],
                 )
             )
             batch.environments.append(env)
@@ -218,28 +225,71 @@ class Optimizer(RevDEOptimizer):
 
         return np.array(
             [
-                self._calculate_fitness(
-                    environment_result.environment_states[0].actor_states[0],
-                    environment_result.environment_states[-1].actor_states[0],
+                self._calculate_panoramic_rotation(
+                    environment_result
                 )
                 for environment_result in batch_results.environment_results
             ]
         )
 
-    def _control(self, environment_index: int, dt: float, control: ActorControl, observations):
-        controller = self._controllers[environment_index]
-        action = controller.get_dof_targets([torch.tensor(obs) for obs in observations])
-        control.set_dof_targets(0, torch.tanh(action) * ACTION_CONSTRAINT)
-        return action.tolist()
+    @staticmethod
+    def _calculate_point_navigation(results, target_points) -> float:
+        trajectory = [(0.0, 0.0)] + target_points
+        distances = [Optimizer._compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
+        target_range = 0.2
+        reached_target_counter = 0
+
+        coordinates = [env_state.actor_states[0].position[:2] for env_state in results.environment_states]
+        for state in coordinates:
+            if reached_target_counter < 0 and Optimizer._check_target(state, target_points[reached_target_counter], target_range):
+                reached_target_counter += 1
+        
+        fitness = sum(distances[:reached_target_counter])
+
+        if reached_target_counter == 3:
+            return fitness
+        else:
+            if reached_target_counter == 0:
+                last_target = (0.0, 0.0)
+            else:
+                last_target = target_points[reached_target_counter-1]
+            last_coord = coordinates[-1]
+            distance = Optimizer._compute_distance(target_points[reached_target_counter], last_target)
+            distance -= Optimizer._compute_distance(target_points[reached_target_counter], last_coord)
+            return fitness + distance
 
     @staticmethod
-    def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
-        # TODO simulation can continue slightly passed the defined sim time.
+    def _calculate_panoramic_rotation(results, vertical_angle_limi = math.pi/4) -> float:
+        total_angle = 0.0
 
-        # distance traveled on the xy plane
+        orientations = [env_state.actor_states[0].orientation for env_state in results.environment_states[1:]]
+        orientations = [Optimizer._from_quaternion_to_axisangle(o)[0] for o in orientations]
+
+        total_angle = abs(sum([o for o in orientations]))
+
+        return total_angle
+
+    @staticmethod
+    def _from_quaternion_to_axisangle(rotation: Quaternion):
+        theta = 2 * math.acos(rotation.w)
+        x = rotation.x / math.sin(theta/2)
+        y = rotation.y / math.sin(theta/2)
+        z = rotation.z / math.sin(theta/2)
+        return x,y,z
+
+
+    @staticmethod
+    def _check_target(coord, target, target_range):
+        if abs(coord[0]-target[0]) < target_range and abs(coord[1]-target[1]) < target_range:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def _compute_distance(point_a, point_b):
         return math.sqrt(
-            (begin_state.position[0] - end_state.position[0]) ** 2
-            + ((begin_state.position[1] - end_state.position[1]) ** 2)
+            (point_a[0] - point_b[0]) ** 2 +
+            (point_a[1] - point_b[1]) ** 2
         )
 
     def _must_do_next_gen(self) -> bool:

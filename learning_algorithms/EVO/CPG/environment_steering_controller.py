@@ -45,7 +45,7 @@ class EnvironmentActorController(EnvironmentController):
             abs(core_position[1]-self.target_points[self.reached_target_counter][1]) < self.target_range):
             self.reached_target_counter += 1
 
-        # compute steeting angle and parameters
+        # compute steering angle and parameters
         a0 = np.array(core_position) - np.array([0.0,0.0])
         b0 = np.array(self.target_points[self.reached_target_counter]) - np.array([0.0,0.0])
         theta = np.arctan2(a0[1], a0[0]) - np.arctan2(b0[1], b0[0])

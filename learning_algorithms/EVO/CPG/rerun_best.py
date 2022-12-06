@@ -1,10 +1,8 @@
 """Visualize and simulate the best robot from the optimization process."""
 
 import math
-from brain import RevDENNbrain
-from network import Actor
-from config import NUM_OBS_TIMES
-from revde_optimizer import DbRevDEOptimizerIndividual
+
+from revde_optimizer import DbRevDEOptimizerIndividual, DbRevDEOptimizerBestIndividual
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
@@ -15,8 +13,6 @@ from revolve2.standard_resources import modular_robots
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 import argparse
-import torch
-
 
 async def main() -> None:
 
@@ -35,8 +31,7 @@ async def main() -> None:
     body = args.body
     num = args.num
 
-    file_path = "./data/RevDENN/"+body+"/database"+num
-
+    file_path = "./test/RevDECPG/"+body+"/database_"+num
 
     """Run the script."""
     db = open_async_database_sqlite(file_path)
@@ -44,8 +39,8 @@ async def main() -> None:
         best_individual = (
             (
                 await session.execute(
-                    select(DbRevDEOptimizerIndividual).order_by(
-                        DbRevDEOptimizerIndividual.fitness.desc()
+                    select(DbRevDEOptimizerBestIndividual).order_by(
+                        DbRevDEOptimizerBestIndividual.fitness.desc()
                     )
                 )
             )
@@ -74,14 +69,24 @@ async def main() -> None:
         }
         active_hinges = [active_hinge_map[id] for id in dof_ids]
 
-        brain = RevDENNbrain()
-        controller = brain.make_controller(body, dof_ids)
-        controller.load_parameters(torch.tensor(params, dtype=torch.float32))
+        cpg_network_structure = make_cpg_network_structure_neighbour(active_hinges)
+
+        initial_state = cpg_network_structure.make_uniform_state(0.5 * math.pi / 2.0)
+        weight_matrix = (
+            cpg_network_structure.make_connection_weights_matrix_from_params(params)
+        )
+        dof_ranges = cpg_network_structure.make_uniform_dof_ranges(1.0)
+        brain = BrainCpgNetworkStatic(
+            initial_state,
+            cpg_network_structure.num_cpgs,
+            weight_matrix,
+            dof_ranges,
+        )
 
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(body, controller, 5)
+    await rerunner.rerun(bot, 5)
 
 
 if __name__ == "__main__":
