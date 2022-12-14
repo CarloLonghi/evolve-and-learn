@@ -8,7 +8,7 @@ from .optimizer import Optimizer
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.optimization import DbId
 from revolve2.standard_resources import modular_robots
-from .revde_optimizer import DbRevDEOptimizerIndividual
+from .revde_optimizer import DbRevDEOptimizerBestIndividual
 from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
@@ -87,8 +87,8 @@ async def main(body, gen, num) -> None:
         best_individual = (
             (
                 await session.execute(
-                    select(DbRevDEOptimizerIndividual).order_by(
-                        DbRevDEOptimizerIndividual.fitness.desc()
+                    select(DbRevDEOptimizerBestIndividual).order_by(
+                        DbRevDEOptimizerBestIndividual.fitness.desc()
                     )
                 )
             )

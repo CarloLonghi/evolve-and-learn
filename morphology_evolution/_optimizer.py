@@ -354,9 +354,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__database,
                 self.__db_id,
             )
-            initial_population = self.__latest_population
-            for i, ind in enumerate(initial_population):
+            for i, ind in enumerate(self.__latest_population):
                 ind.genotype = new_genotypes[i]
+            initial_population = self.__latest_population
             async with AsyncSession(self.__database) as session:
                 async with session.begin():
                     await self.__save_generation_using_session(
