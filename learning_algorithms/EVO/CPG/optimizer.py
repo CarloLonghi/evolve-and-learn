@@ -232,8 +232,7 @@ class Optimizer(RevDEOptimizer):
         )
 
     @staticmethod
-    def _calculate_point_navigation(results) -> float:
-        targets = Optimizer._target_points
+    def _calculate_point_navigation(results, targets) -> float:
         trajectory = [(0.0, 0.0)] + targets
         distances = [compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
         target_range = 0.2
