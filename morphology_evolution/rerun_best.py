@@ -35,9 +35,10 @@ async def main() -> None:
             .all()
         )
 
-        fitnesses_ids = [ind[1] for ind in individuals]
+        fitnesses_ids = [ind.fitness_id for ind in individuals]
         fitnesses = np.array([(await FloatSerializer.from_database(session, [id]))[0] for id in fitnesses_ids])
-        max_id = np.argmax(fitnesses)
+        max_id = np.argsort(fitnesses)[-1]
+        print(f"Fitness: {np.max(fitnesses)}")
 
         genotype_id = individuals[max_id][0]
         genotype_db = (

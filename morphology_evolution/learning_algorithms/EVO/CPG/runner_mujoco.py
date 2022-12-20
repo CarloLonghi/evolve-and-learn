@@ -142,8 +142,7 @@ class LocalRunner(Runner):
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                #env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
-                env_descr.controller.control(control_step, control_user)
+                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
@@ -288,19 +287,6 @@ class LocalRunner(Runner):
             material="grid",
         )
         env_mjcf.visual.headlight.active = 0
-
-        # add target points markers
-        #target_points = [(-1,1),(-2,2)]
-        #for i, point in enumerate(target_points):
-        #    env_mjcf.worldbody.add(
-        #        "geom",
-        #        name="target_point_"+str(i),
-        #        pos=[point[0], point[1], 0.0],
-        #        size=[0.1, 0.1, 0.000000001],
-        #        type="plane",
-        #        condim=1,
-        #        rgba="1. 0. 0. 1.",
-        #    )
 
         for actor_index, posed_actor in enumerate(env_descr.actors):
             urdf = physbot_to_urdf(

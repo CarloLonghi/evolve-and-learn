@@ -13,14 +13,12 @@ from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from revolve2.core.optimization import DbId
 from revolve2.core.physics.actor import Actor
-#from .environment_steering_controller import EnvironmentActorController
-from revolve2.core.physics.environment_actor_controller import EnvironmentActorController
+from .environment_steering_controller import EnvironmentActorController
 from revolve2.core.physics.running import (ActorState, Batch,
                                            Environment, PosedActor, Runner)
 from .runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
-
 
 class Optimizer(RevDEOptimizer):
     """
@@ -105,7 +103,7 @@ class Optimizer(RevDEOptimizer):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
-        self._target_points = [(-1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]
+        self._target_points = [(-1.0, -0.5), (-1.5, -0.5), (-1.5, 1.0)]
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -203,7 +201,7 @@ class Optimizer(RevDEOptimizer):
             controller = brain.make_controller(self._body, self._dof_ids)
 
             bounding_box = self._actor.calc_aabb()
-            env = Environment(EnvironmentActorController(controller))
+            env = Environment(EnvironmentActorController(controller, self._target_points, steer=True))
             env.actors.append(
                 PosedActor(
                     self._actor,
@@ -224,7 +222,7 @@ class Optimizer(RevDEOptimizer):
 
         return np.array(
             [
-                self._calculate_panoramic_rotation(
+                self._calculate_point_navigation(
                     environment_result
                 )
                 for environment_result in batch_results.environment_results
@@ -232,64 +230,87 @@ class Optimizer(RevDEOptimizer):
         )
 
     @staticmethod
-    def _calculate_point_navigation(results, target_points) -> float:
-        trajectory = [(0.0, 0.0)] + target_points
-        distances = [Optimizer._compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
+    def _calculate_point_navigation(results) -> float:
+        targets = Optimizer._target_points
+        trajectory = [(0.0, 0.0)] + targets
+        distances = [compute_distance(trajectory[i], trajectory[i-1]) for i in range(1, len(trajectory))]
         target_range = 0.2
         reached_target_counter = 0
 
         coordinates = [env_state.actor_states[0].position[:2] for env_state in results.environment_states]
         for state in coordinates:
-            if reached_target_counter < 0 and Optimizer._check_target(state, target_points[reached_target_counter], target_range):
+            if reached_target_counter < len(targets) and check_target(state, targets[reached_target_counter], target_range):
                 reached_target_counter += 1
         
         fitness = sum(distances[:reached_target_counter])
 
-        if reached_target_counter == 3:
+        if reached_target_counter == len(targets):
             return fitness
         else:
             if reached_target_counter == 0:
                 last_target = (0.0, 0.0)
             else:
-                last_target = target_points[reached_target_counter-1]
+                last_target = trajectory[reached_target_counter]
             last_coord = coordinates[-1]
-            distance = Optimizer._compute_distance(target_points[reached_target_counter], last_target)
-            distance -= Optimizer._compute_distance(target_points[reached_target_counter], last_coord)
+            distance = compute_distance(targets[reached_target_counter], last_target)
+            distance -= compute_distance(targets[reached_target_counter], last_coord)
             return fitness + distance
 
     @staticmethod
-    def _calculate_panoramic_rotation(results, vertical_angle_limi = math.pi/4) -> float:
+    def _calculate_panoramic_rotation(results, vertical_angle_limit = math.pi/4) -> float:
         total_angle = 0.0
 
         orientations = [env_state.actor_states[0].orientation for env_state in results.environment_states[1:]]
-        orientations = [Optimizer._from_quaternion_to_axisangle(o)[0] for o in orientations]
+        directions = [compute_directions(o) for o in orientations][1:]
 
-        total_angle = abs(sum([o for o in orientations]))
+        vertical_limit = math.sin(vertical_angle_limit)
+
+        z_vals = np.argsort([abs(d.x) for d in directions[0]])
+        chosen_orientation = z_vals[0]
+
+        for i in range(1, len(directions)):
+            u = directions[i-1][chosen_orientation]
+            v = directions[i][chosen_orientation]
+            
+            if abs(u.x) > vertical_limit:
+                return total_angle
+            
+            dot = u.z*v.z + u.y*v.y
+            det = u.z*v.y - u.y*v.z
+            delta = math.atan2(det, dot)
+
+            total_angle += delta
 
         return total_angle
 
-    @staticmethod
-    def _from_quaternion_to_axisangle(rotation: Quaternion):
-        theta = 2 * math.acos(rotation.w)
-        x = rotation.x / math.sin(theta/2)
-        y = rotation.y / math.sin(theta/2)
-        z = rotation.z / math.sin(theta/2)
-        return x,y,z
-
-
-    @staticmethod
-    def _check_target(coord, target, target_range):
-        if abs(coord[0]-target[0]) < target_range and abs(coord[1]-target[1]) < target_range:
-            return True
-        else:
-            return False
-
-    @staticmethod
-    def _compute_distance(point_a, point_b):
-        return math.sqrt(
-            (point_a[0] - point_b[0]) ** 2 +
-            (point_a[1] - point_b[1]) ** 2
-        )
-
     def _must_do_next_gen(self) -> bool:
         return self.generation_number != self._num_generations
+
+def compute_directions(q: Quaternion):
+    vi = Vector3()
+    vi.x = 1 - 2*(q.y**2+q.z**2)
+    vi.y = 2*(q.x*q.y + q.z*q.w)
+    vi.z = 2*(q.x*q.z - 2*q.y*q.w)
+    
+    vj = Vector3()
+    vj.x = 2*(q.x*q.y - q.z*q.w)
+    vj.y = 1 - 2*(q.x**2 + q.z**2)
+    vj.z = 2*(q.y*q.z + q.x*q.w)
+
+    vk = Vector3()
+    vk.x = 2*(q.x*q.z + q.y*q.w)
+    vk.y = 2*(q.y*q.z - q.x*q.w)
+    vk.z = 1 - 2*(q.x**2 + q.y**2)
+    return vi, vj, vk
+
+def check_target(coord, target, target_range):
+    if abs(coord[0]-target[0]) < target_range and abs(coord[1]-target[1]) < target_range:
+        return True
+    else:
+        return False
+
+def compute_distance(point_a, point_b):
+    return math.sqrt(
+        (point_a[0] - point_b[0]) ** 2 +
+        (point_a[1] - point_b[1]) ** 2
+    )

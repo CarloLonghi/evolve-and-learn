@@ -2,7 +2,7 @@
 
 import math
 
-from .revde_optimizer import DbRevDEOptimizerIndividual
+from .revde_optimizer import DbRevDEOptimizerIndividual, DbRevDEOptimizerBestIndividual
 from revolve2.core.database import open_async_database_sqlite
 from revolve2.core.database.serializers import Ndarray1xnSerializer
 from revolve2.core.modular_robot import ModularRobot
@@ -39,8 +39,8 @@ async def main() -> None:
         best_individual = (
             (
                 await session.execute(
-                    select(DbRevDEOptimizerIndividual).order_by(
-                        DbRevDEOptimizerIndividual.fitness.desc()
+                    select(DbRevDEOptimizerBestIndividual).order_by(
+                        DbRevDEOptimizerBestIndividual.fitness.desc()
                     )
                 )
             )

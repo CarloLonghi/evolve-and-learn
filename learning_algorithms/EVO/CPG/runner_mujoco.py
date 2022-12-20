@@ -142,8 +142,7 @@ class LocalRunner(Runner):
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                #env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
-                env_descr.controller.control(control_step, control_user)
+                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
@@ -289,9 +288,9 @@ class LocalRunner(Runner):
         )
         env_mjcf.visual.headlight.active = 0
 
-        # add target points markers
-        #target_points = [(-1,1),(-2,2)]
-        #for i, point in enumerate(target_points):
+        #add target points markers
+        # target_points = [(1.0, -0.5), (-1.5, 0.0), (-1.0, 1.0)]
+        # for i, point in enumerate(target_points):
         #    env_mjcf.worldbody.add(
         #        "geom",
         #        name="target_point_"+str(i),
