@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
+from sqlalchemy import Column, Integer, String
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
     DbEAOptimizer,
     DbEAOptimizerGeneration,
-    DbEAOptimizerIndividual,
     DbEAOptimizerParent,
     DbEAOptimizerState,
 )
@@ -43,7 +43,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId
-    ) -> Tuple[List[Fitness], List[Genotype]]:
+    ) -> Tuple[Tuple[List[Fitness]], List[Genotype]]:
         """
         Evaluate a list of genotypes.
 
@@ -349,11 +349,12 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         # evaluate initial population if required
         if self.__latest_fitnesses is None:
             logging.info("Evaluating initial population of morphologies")
-            self.__latest_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
+            initial_fitnesses, new_genotypes, = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
                 self.__database,
                 self.__db_id,
             )
+            self.__latest_fitnesses = initial_fitnesses
             for i, ind in enumerate(self.__latest_population):
                 ind.genotype = new_genotypes[i]
             initial_population = self.__latest_population
@@ -362,7 +363,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     await self.__save_generation_using_session(
                         session, None, None, self.__latest_population, None
                     )
-            initial_fitnesses = self.__latest_fitnesses
+            #initial_fitnesses = self.__latest_fitnesses
             logging.info("Finished evaluating initial population of morphologies")
         else:
             initial_population = None
@@ -377,7 +378,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             # let user select parents
             parent_selections = self.__safe_select_parents(
                 [i.genotype for i in self.__latest_population],
-                self.__latest_fitnesses,
+                self.__latest_fitnesses[1],
                 self.__offspring_size,
             )
 
@@ -411,14 +412,15 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             # let user select survivors between old and new individuals
             old_survivors, new_survivors = self.__safe_select_survivors(
                 [i.genotype for i in self.__latest_population],
-                self.__latest_fitnesses,
+                self.__latest_fitnesses[1],
                 [i.genotype for i in new_individuals],
-                new_fitnesses,
+                new_fitnesses[1],
                 len(self.__latest_population),
             )
 
             survived_new_individuals = [new_individuals[i] for i in new_survivors]
-            survived_new_fitnesses = [new_fitnesses[i] for i in new_survivors]
+            survived_new_fitnesses = [[new_fitnesses[0][i] for i in new_survivors],[new_fitnesses[1][i] for i in new_survivors]]
+
 
             # set ids for new individuals
             for individual in survived_new_individuals:
@@ -429,9 +431,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__latest_population[i] for i in old_survivors
             ] + survived_new_individuals
 
-            self.__latest_fitnesses = [
-                self.__latest_fitnesses[i] for i in old_survivors
-            ] + survived_new_fitnesses
+            self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + survived_new_fitnesses[0],
+                                        [self.__latest_fitnesses[1][i] for i in old_survivors] + survived_new_fitnesses[1]]
 
             # save generation and possibly fitnesses of initial population
             # and let user save their state
@@ -476,19 +477,24 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId
-    ) -> Tuple[List[Fitness], List[Genotype]]:
+    ) -> Tuple[List[Fitness], List[Genotype], List[Fitness]]:
         fitnesses, new_genotypes = await self._evaluate_generation(
             genotypes=genotypes,
             database=database,
             db_id=db_id
         )
-        assert type(fitnesses) == list
-        assert len(fitnesses) == len(genotypes)
-        assert all(type(e) == self.__fitness_type for e in fitnesses)
+        starting_fitnesses = fitnesses[0]
+        final_fitnesses = fitnesses[1]
+        assert type(final_fitnesses) == list
+        assert len(final_fitnesses) == len(genotypes)
+        assert all(type(e) == self.__fitness_type for e in final_fitnesses)
         assert type(new_genotypes) == list
         assert len(new_genotypes) == len(genotypes)
         assert all(type(e) == self.__genotype_type for e in new_genotypes)
-        return fitnesses, new_genotypes
+        assert type(starting_fitnesses) == list
+        assert len(starting_fitnesses) == len(genotypes)
+        assert all(type(e) == self.__fitness_type for e in starting_fitnesses)
+        return (starting_fitnesses, final_fitnesses), new_genotypes
 
     def __safe_select_parents(
         self,
@@ -551,9 +557,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         self,
         session: AsyncSession,
         initial_population: Optional[List[_Individual[Genotype]]],
-        initial_fitnesses: Optional[List[Fitness]],
+        initial_fitnesses: Optional[Tuple[List[Fitness]]],
         new_individuals: List[_Individual[Genotype]],
-        new_fitnesses: Optional[List[Fitness]],
+        new_fitnesses: Optional[Tuple[List[Fitness]]],
     ) -> None:
         # TODO this function can probably be simplified as well as optimized.
         # but it works so I'll leave it for now.
@@ -562,10 +568,14 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         if initial_fitnesses is not None:
             assert initial_population is not None
 
-            fitness_ids = await self.__fitness_serializer.to_database(
-                session, initial_fitnesses
+            starting_fitness_ids = await self.__fitness_serializer.to_database(
+                session, initial_fitnesses[0]
             )
-            assert len(fitness_ids) == len(initial_fitnesses)
+            final_fitness_ids = await self.__fitness_serializer.to_database(
+                session, initial_fitnesses[1]
+            )
+            assert len(starting_fitness_ids) == len(initial_fitnesses[0])
+            assert len(final_fitness_ids) == len(initial_fitnesses[1])
 
             rows = (
                 (
@@ -592,7 +602,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 raise IncompatibleError()
 
             for i, row in enumerate(rows):
-                row.fitness_id = fitness_ids[i]
+                row.starting_fitness_id = starting_fitness_ids[i]
+                row.final_fitness_id = final_fitness_ids[i]
 
         # save current optimizer state
         session.add(
@@ -607,17 +618,26 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             session, [i.genotype for i in new_individuals]
         )
         assert len(genotype_ids) == len(new_individuals)
-        fitness_ids2: List[Optional[int]]
+        starting_fitness_ids2: List[Optional[int]]
+        final_fitness_ids2: List[Optional[int]]
         if new_fitnesses is not None:
-            fitness_ids2 = [
+            starting_fitness_ids2 = [
                 f
                 for f in await self.__fitness_serializer.to_database(
-                    session, new_fitnesses
+                    session, new_fitnesses[0]
                 )
             ]  # this extra comprehension is useless but it stops mypy from complaining
-            assert len(fitness_ids2) == len(new_fitnesses)
+            assert len(starting_fitness_ids2) == len(new_fitnesses)
+            final_fitness_ids2 = [
+                f
+                for f in await self.__fitness_serializer.to_database(
+                    session, new_fitnesses[1]
+                )
+            ]  # this extra comprehension is useless but it stops mypy from complaining
+            assert len(final_fitness_ids2) == len(new_fitnesses)
         else:
-            fitness_ids2 = [None for _ in range(len(new_individuals))]
+            starting_fitness_ids2 = [None for _ in range(len(new_individuals))]
+            final_fitness_ids2 = [None for _ in range(len(new_individuals))]
 
         session.add_all(
             [
@@ -625,9 +645,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     ea_optimizer_id=self.__ea_optimizer_id,
                     individual_id=i.id,
                     genotype_id=g_id,
-                    fitness_id=f_id,
+                    starting_fitness_id=s_id,
+                    final_fitness_id=f_id,
                 )
-                for i, g_id, f_id in zip(new_individuals, genotype_ids, fitness_ids2)
+                for i, g_id, s_id, f_id in zip(new_individuals, genotype_ids, starting_fitness_ids2, final_fitness_ids2)
             ]
         )
 
@@ -668,3 +689,20 @@ class _Individual(Generic[Genotype]):
     # Empty list of parents means this is from the initial population
     # None means we did not bother loading the parents during recovery because they are not needed.
     parent_ids: Optional[List[int]]
+
+
+class DbEAOptimizerIndividual(DbBase):
+    """
+    An individual with a fitness which may or may not be assigned.
+
+    Can be part of multiple generations.
+    """
+
+    __tablename__ = "ea_morph_optimizer_individual"
+
+    ea_optimizer_id = Column(Integer, nullable=False, primary_key=True)
+    individual_id = Column(Integer, nullable=False, primary_key=True)
+    genotype_id = Column(Integer, nullable=False)
+    starting_fitness_id = Column(Integer, nullable=True)
+    final_fitness_id = Column(Integer, nullable=True)
+    

@@ -87,9 +87,6 @@ class Optimizer(RevDEOptimizer):
         initial_population = nprng.standard_normal((population_size, self._cpg_network_structure.num_connections))
 
         await super().ainit_new(
-            database=database,
-            session=session,
-            db_id=db_id,
             rng=rng,
             population_size=population_size,
             initial_population=initial_population,
@@ -170,8 +167,6 @@ class Optimizer(RevDEOptimizer):
 
     async def _evaluate_population(
         self,
-        database: AsyncEngine,
-        db_id: DbId,
         population: npt.NDArray[np.float_],
     ) -> npt.NDArray[np.float_]:
         batch = Batch(

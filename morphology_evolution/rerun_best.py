@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
-    DbEAOptimizerIndividual,
 )
+from _optimizer import DbEAOptimizerIndividual
 from genotype import DbGenotype, GenotypeSerializer, Genotype
 from revolve2.core.database.serializers import FloatSerializer
 from array_genotype.array_genotype import ArrayGenotypeSerializer as BrainSerializer, develop as brain_develop
@@ -29,13 +29,13 @@ async def main() -> None:
         individuals = (
             (
                 await session.execute(
-                    select(DbEAOptimizerIndividual.genotype_id, DbEAOptimizerIndividual.fitness_id)
+                    select(DbEAOptimizerIndividual.genotype_id, DbEAOptimizerIndividual.final_fitness_id)
                 )
             )
             .all()
         )
 
-        fitnesses_ids = [ind.fitness_id for ind in individuals]
+        fitnesses_ids = [ind.final_fitness_id for ind in individuals]
         fitnesses = np.array([(await FloatSerializer.from_database(session, [id]))[0] for id in fitnesses_ids])
         max_id = np.argsort(fitnesses)[-1]
         print(f"Fitness: {np.max(fitnesses)}")
