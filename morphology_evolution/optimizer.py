@@ -217,21 +217,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self,
         old_individuals: List[Genotype],
         old_fitnesses: List[float],
-        new_individuals: List[Genotype],
-        new_fitnesses: List[float],
         num_survivors: int,
     ) -> Tuple[List[int], List[int]]:
-        assert len(old_individuals) == num_survivors
-
-        return population_management.steady_state(
-            old_individuals,
-            old_fitnesses,
-            new_individuals,
-            new_fitnesses,
-            lambda num_survivors, genotypes, fitnesses: selection.topn(
-                    num_survivors, genotypes,fitnesses
-            ),
-        )
+        return selection.topn(num_survivors, old_individuals, old_fitnesses)
 
     def _must_do_next_gen(self) -> bool:
         return self.generation_index != self._num_generations

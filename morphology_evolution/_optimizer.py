@@ -410,29 +410,23 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             ]
 
             # let user select survivors between old and new individuals
-            old_survivors, new_survivors = self.__safe_select_survivors(
+            old_survivors = self.__safe_select_survivors(
                 [i.genotype for i in self.__latest_population],
                 self.__latest_fitnesses[1],
-                [i.genotype for i in new_individuals],
-                new_fitnesses[1],
-                len(self.__latest_population),
+                len(self.__latest_population) - self.__offspring_size,
             )
 
-            survived_new_individuals = [new_individuals[i] for i in new_survivors]
-            survived_new_fitnesses = [[new_fitnesses[0][i] for i in new_survivors],[new_fitnesses[1][i] for i in new_survivors]]
-
-
             # set ids for new individuals
-            for individual in survived_new_individuals:
+            for individual in new_individuals:
                 individual.id = self.__gen_next_individual_id()
 
             # combine old and new and store as the new generation
             self.__latest_population = [
                 self.__latest_population[i] for i in old_survivors
-            ] + survived_new_individuals
+            ] + new_individuals
 
-            self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + survived_new_fitnesses[0],
-                                        [self.__latest_fitnesses[1][i] for i in old_survivors] + survived_new_fitnesses[1]]
+            self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + new_fitnesses[0],
+                                        [self.__latest_fitnesses[1][i] for i in old_survivors] + new_fitnesses[1]]
 
             # save generation and possibly fitnesses of initial population
             # and let user save their state
@@ -442,8 +436,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                         session,
                         initial_population,
                         initial_fitnesses,
-                        survived_new_individuals,
-                        survived_new_fitnesses,
+                        new_individuals,
+                        new_fitnesses,
                     )
                     self._on_generation_checkpoint(session)
             # in any case they should be none after saving once
@@ -530,23 +524,16 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         self,
         old_individuals: List[Genotype],
         old_fitnesses: List[Fitness],
-        new_individuals: List[Genotype],
-        new_fitnesses: List[Fitness],
         num_survivors: int,
     ) -> Tuple[List[int], List[int]]:
-        old_survivors, new_survivors = self._select_survivors(
+        old_survivors = self._select_survivors(
             old_individuals,
             old_fitnesses,
-            new_individuals,
-            new_fitnesses,
             num_survivors,
         )
         assert type(old_survivors) == list
-        assert type(new_survivors) == list
-        assert len(old_survivors) + len(new_survivors) == len(self.__latest_population)
         assert all(type(s) == int for s in old_survivors)
-        assert all(type(s) == int for s in new_survivors)
-        return (old_survivors, new_survivors)
+        return old_survivors
 
     def __safe_must_do_next_gen(self) -> bool:
         must_do = self._must_do_next_gen()
@@ -627,14 +614,14 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     session, new_fitnesses[0]
                 )
             ]  # this extra comprehension is useless but it stops mypy from complaining
-            assert len(starting_fitness_ids2) == len(new_fitnesses)
+            assert len(starting_fitness_ids2) == len(new_fitnesses[0])
             final_fitness_ids2 = [
                 f
                 for f in await self.__fitness_serializer.to_database(
                     session, new_fitnesses[1]
                 )
             ]  # this extra comprehension is useless but it stops mypy from complaining
-            assert len(final_fitness_ids2) == len(new_fitnesses)
+            assert len(final_fitness_ids2) == len(new_fitnesses[1])
         else:
             starting_fitness_ids2 = [None for _ in range(len(new_individuals))]
             final_fitness_ids2 = [None for _ in range(len(new_individuals))]
