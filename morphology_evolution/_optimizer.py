@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Float
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
     DbEAOptimizer,
@@ -21,6 +21,9 @@ from revolve2.core.optimization.ea.generic_ea._database import (
     DbEAOptimizerParent,
     DbEAOptimizerState,
 )
+from morphological_measures import MorphologicalMeasures
+from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
+    develop_v1 as body_develop,)
 
 Genotype = TypeVar("Genotype")
 Fitness = TypeVar("Fitness")
@@ -626,6 +629,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             starting_fitness_ids2 = [None for _ in range(len(new_individuals))]
             final_fitness_ids2 = [None for _ in range(len(new_individuals))]
 
+        # compute morphological measures
+        measures = [MorphologicalMeasures(body_develop(ind.genotype.body)) for ind in new_individuals]
+
         session.add_all(
             [
                 DbEAOptimizerIndividual(
@@ -634,8 +640,14 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     genotype_id=g_id,
                     starting_fitness_id=s_id,
                     final_fitness_id=f_id,
+                    absolute_size = mm.num_modules,
+                    proportion = compute_proportion(mm),
+                    num_bricks = mm.num_bricks,
+                    rel_num_limbs = mm.limbs,
+                    symmetry = mm.symmetry,
+                    branching = mm.branching
                 )
-                for i, g_id, s_id, f_id in zip(new_individuals, genotype_ids, starting_fitness_ids2, final_fitness_ids2)
+                for i, g_id, s_id, f_id, mm in zip(new_individuals, genotype_ids, starting_fitness_ids2, final_fitness_ids2, measures)
             ]
         )
 
@@ -669,6 +681,16 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         )
 
 
+def compute_proportion(measure: MorphologicalMeasures):
+    depth = measure.bounding_box_depth
+    width = measure.bounding_box_width
+    height = measure.bounding_box_height
+
+    min_dim = min(depth, width, height)
+    max_dim = max(depth, width, height)
+
+    return min_dim / max_dim
+
 @dataclass
 class _Individual(Generic[Genotype]):
     id: int
@@ -692,4 +714,10 @@ class DbEAOptimizerIndividual(DbBase):
     genotype_id = Column(Integer, nullable=False)
     starting_fitness_id = Column(Integer, nullable=True)
     final_fitness_id = Column(Integer, nullable=True)
+    absolute_size = Column(Integer, nullable=False)
+    proportion = Column(Float, nullable=False)
+    num_bricks = Column(Integer, nullable=False)
+    rel_num_limbs = Column(Float, nullable=False)
+    symmetry = Column(Float, nullable=False)
+    branching = Column(Float, nullable=False)
     
