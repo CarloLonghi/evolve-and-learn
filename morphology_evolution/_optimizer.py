@@ -24,6 +24,7 @@ from revolve2.core.optimization.ea.generic_ea._database import (
 from morphological_measures import MorphologicalMeasures
 from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
     develop_v1 as body_develop,)
+from render.render import Render
 
 Genotype = TypeVar("Genotype")
 Fitness = TypeVar("Fitness")
@@ -629,8 +630,17 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             starting_fitness_ids2 = [None for _ in range(len(new_individuals))]
             final_fitness_ids2 = [None for _ in range(len(new_individuals))]
 
+        bodies = [body_develop(ind.genotype.body) for ind in new_individuals]
+
+        # save body image
+        for ind, body in zip(new_individuals, bodies):
+            render = Render()
+            id = ind.id
+            img_path = f'database/body_images/generation_{self.generation_index}/individual_{id}.png'
+            render.render_robot(body.core, img_path)
+
         # compute morphological measures
-        measures = [MorphologicalMeasures(body_develop(ind.genotype.body)) for ind in new_individuals]
+        measures = [MorphologicalMeasures(body) for body in bodies]
 
         session.add_all(
             [
