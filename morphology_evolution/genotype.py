@@ -179,6 +179,7 @@ def random(
     innov_db_body: multineat.InnovationDatabase,
     rng: Random,
     num_initial_mutations: int,
+    robot_grid_size: int,
 ) -> Genotype:
     """
     Create a random genotype.
@@ -199,17 +200,7 @@ def random(
         num_initial_mutations,
     )
 
-    body_d = body_develop(body)
-    _, dof_ids = body_d.to_actor()
-    active_hinges_unsorted = body_d.find_active_hinges()
-    active_hinge_map = {
-        active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
-    }
-    active_hinges = [active_hinge_map[id] for id in dof_ids]
-    cpg_network_structure = make_cpg_network_structure_neighbour(
-        active_hinges
-    )
-    brain = random_array_genotype(cpg_network_structure.num_connections, rng)
+    brain = random_array_genotype(robot_grid_size**3, rng)
 
     return Genotype(body, brain)
 

@@ -24,6 +24,7 @@ from revolve2.core.physics.running import (
     Runner,
 )
 from learning_algorithms.EVO.CPG.optimize import main as learn_controller
+#from learning_algorithms.DRL.PPO.optimize import main as learn_controller
 from revolve2.runners.mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -133,6 +134,11 @@ class Optimizer(EAOptimizer[Genotype, float]):
         rng: Random,
         innov_db_body: multineat.InnovationDatabase,
         innov_db_brain: multineat.InnovationDatabase,
+        simulation_time: int,
+        sampling_frequency: float,
+        control_frequency: float,
+        num_generations: int,
+        offspring_size: int,
     ) -> bool:
         """
         Try to initialize this class async from a database.
@@ -157,6 +163,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             genotype_serializer=GenotypeSerializer,
             fitness_type=float,
             fitness_serializer=FloatSerializer,
+            offspring_size=offspring_size
         ):
             return False
 
@@ -191,6 +198,11 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._innov_db_body.Deserialize(opt_row.innov_db_body)
         self._innov_db_brain = innov_db_brain
         self._innov_db_brain.Deserialize(opt_row.innov_db_brain)
+
+        self._simulation_time = simulation_time
+        self._sampling_frequency = sampling_frequency
+        self._control_frequency = control_frequency
+        self._num_generations = num_generations
 
         return True
 

@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 from pyrr import Quaternion, Vector3
 from .revde_optimizer import RevDEOptimizer
-from revolve2.actor_controllers.cpg import CpgNetworkStructure
+from revolve2.actor_controllers.cpg import CpgNetworkStructure, Cpg
 from revolve2.core.modular_robot import Body
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
@@ -80,10 +80,6 @@ class Optimizer(RevDEOptimizer):
         nprng = np.random.Generator(
             np.random.PCG64(rng.randint(0, 2**63))
         )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
-
-        nprng = np.random.Generator(
-            np.random.PCG64(rng.randint(0, 2**63))
-        )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
         initial_population = nprng.standard_normal((population_size, self._cpg_network_structure.num_connections))
 
         await super().ainit_new(
@@ -100,7 +96,7 @@ class Optimizer(RevDEOptimizer):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
-        self._target_points = [(-1.0, -0.5), (-1.5, -0.5), (-1.5, 1.0)]
+        self._target_points = [(1., -1.), (0., -2.)]
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -157,10 +153,8 @@ class Optimizer(RevDEOptimizer):
             active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
         }
         active_hinges = [active_hinge_map[id] for id in self._dof_ids]
-
-        self._cpg_network_structure = make_cpg_network_structure_neighbour(
-            active_hinges
-        )
+        cpgs = [Cpg(i) for i, _ in enumerate(active_hinges)]
+        self._cpg_network_structure = CpgNetworkStructure(cpgs, set())
 
     def _init_runner(self, num_simulators: int = 1) -> None:
         return LocalRunner(headless=True, num_simulators=num_simulators)
@@ -297,17 +291,17 @@ class Optimizer(RevDEOptimizer):
 def compute_directions(q: Quaternion):
     vi = Vector3()
     vi.x = 1 - 2*(q.y**2+q.z**2)
-    vi.y = 2*(q.x*q.y + q.z*q.w)
-    vi.z = 2*(q.x*q.z - 2*q.y*q.w)
+    vi.y = 2*(q.x*q.y - q.z*q.w)
+    vi.z = 2*(q.x*q.z + q.y*q.w)
     
     vj = Vector3()
-    vj.x = 2*(q.x*q.y - q.z*q.w)
+    vj.x = 2*(q.x*q.y + q.z*q.w)
     vj.y = 1 - 2*(q.x**2 + q.z**2)
-    vj.z = 2*(q.y*q.z + q.x*q.w)
+    vj.z = 2*(q.y*q.z - q.x*q.w)
 
     vk = Vector3()
-    vk.x = 2*(q.x*q.z + q.y*q.w)
-    vk.y = 2*(q.y*q.z - q.x*q.w)
+    vk.x = 2*(q.x*q.z - q.y*q.w)
+    vk.y = 2*(q.y*q.z + q.x*q.w)
     vk.z = 1 - 2*(q.x**2 + q.y**2)
     return vi, vj, vk
 

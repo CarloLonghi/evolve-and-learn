@@ -20,8 +20,10 @@ async def main() -> None:
     CONTROL_FREQUENCY = 5
 
     POPULATION_SIZE = 100
-    OFFSPRING_SIZE = 100
+    OFFSPRING_SIZE = 50
     NUM_GENERATIONS = 30
+
+    GRID_SIZE = 22
 
     # database
     database = open_async_database_sqlite("./database", create=True)
@@ -48,7 +50,7 @@ async def main() -> None:
     innov_db_brain = multineat.InnovationDatabase()
 
     initial_population = [
-        random_genotype(innov_db_body, rng, NUM_INITIAL_MUTATIONS)
+        random_genotype(innov_db_body, rng, NUM_INITIAL_MUTATIONS, robot_grid_size=GRID_SIZE)
         for _ in range(POPULATION_SIZE)
     ]
 
@@ -58,6 +60,11 @@ async def main() -> None:
         innov_db_body=innov_db_body,
         innov_db_brain=innov_db_brain,
         rng=rng,
+        simulation_time=SIMULATION_TIME,
+        sampling_frequency=SAMPLING_FREQUENCY,
+        control_frequency=CONTROL_FREQUENCY,
+        num_generations=NUM_GENERATIONS,
+        offspring_size=OFFSPRING_SIZE,
     )
     if maybe_optimizer is not None:
         optimizer = maybe_optimizer
