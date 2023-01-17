@@ -15,7 +15,6 @@ from revolve2.core.database import IncompatibleError
 from revolve2.core.database.serializers import FloatSerializer
 from revolve2.core.optimization import DbId
 from _optimizer import EAOptimizer
-#from revolve2.core.optimization.ea.generic_ea import EAOptimizer
 from revolve2.core.physics.running import (
     ActorState,
     Batch,
@@ -24,7 +23,6 @@ from revolve2.core.physics.running import (
     Runner,
 )
 from learning_algorithms.EVO.CPG.optimize import main as learn_controller
-#from learning_algorithms.DRL.PPO.optimize import main as learn_controller
 from revolve2.runners.mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession

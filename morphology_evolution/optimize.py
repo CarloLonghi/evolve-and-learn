@@ -15,7 +15,7 @@ async def main() -> None:
     # number of initial mutations for body and brain CPPNWIN networks
     NUM_INITIAL_MUTATIONS = 10
 
-    SIMULATION_TIME = 30
+    SIMULATION_TIME = 60
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
@@ -50,7 +50,7 @@ async def main() -> None:
     innov_db_brain = multineat.InnovationDatabase()
 
     initial_population = [
-        random_genotype(innov_db_body, rng, NUM_INITIAL_MUTATIONS, robot_grid_size=GRID_SIZE)
+        random_genotype(innov_db_body, rng, NUM_INITIAL_MUTATIONS)
         for _ in range(POPULATION_SIZE)
     ]
 
