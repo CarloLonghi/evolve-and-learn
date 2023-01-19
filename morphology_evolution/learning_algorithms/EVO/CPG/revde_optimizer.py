@@ -255,7 +255,7 @@ class DbRevDEOptimizerBestIndividual(DbBase):
 class DbRevDEOptimizerGeneration(DbBase):
     """A single generation."""
 
-    __tablename__ = "ea_optimizer_generation"
+    __tablename__ = "revde_optimizer_generation"
 
     ea_optimizer_id = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
     gen_num = sqlalchemy.Column(sqlalchemy.Integer, nullable=False, primary_key=True)
