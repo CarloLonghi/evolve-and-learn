@@ -19,6 +19,8 @@ from revolve2.core.physics.running import (ActorState, Batch,
 from .runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from array_genotype.array_genotype import ArrayGenotype
+from array_genotype.array_genotype_mutation import mutate as brain_mutation
 
 class Optimizer(RevDEOptimizer):
     """
@@ -49,6 +51,7 @@ class Optimizer(RevDEOptimizer):
         rng: Random,
         population_size: int,
         robot_body: Body,
+        inherited_brain: List,
         simulation_time: int,
         sampling_frequency: float,
         control_frequency: float,
@@ -77,11 +80,11 @@ class Optimizer(RevDEOptimizer):
         self._body = robot_body
         self._init_actor_and_cpg_network_structure()
 
-        nprng = np.random.Generator(
-            np.random.PCG64(rng.randint(0, 2**63))
-        )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
-        initial_population = nprng.standard_normal((population_size, self._cpg_network_structure.num_connections))
-
+        inherited_brain = np.array(inherited_brain)
+        initial_population = np.repeat(np.expand_dims(inherited_brain, axis=0), population_size, axis=0)
+        gaussian_noise = np.random.normal(scale=0.5, size=[len(initial_population)-1, inherited_brain.shape[0]])
+        initial_population[1:] += gaussian_noise
+        
         await super().ainit_new(
             rng=rng,
             population_size=population_size,
@@ -153,9 +156,9 @@ class Optimizer(RevDEOptimizer):
             active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
         }
         active_hinges = [active_hinge_map[id] for id in self._dof_ids]
-        self._cpg_network_structure = make_cpg_network_structure_neighbour(
-            active_hinges
-        )
+        cpgs = [Cpg(i) for i, _ in enumerate(active_hinges)]
+        self._cpg_network_structure = CpgNetworkStructure(cpgs, set())
+
 
     def _init_runner(self, num_simulators: int = 1) -> None:
         return LocalRunner(headless=True, num_simulators=num_simulators)
@@ -264,7 +267,7 @@ class Optimizer(RevDEOptimizer):
         total_angle = 0.0
 
         orientations = [env_state.actor_states[0].orientation for env_state in results.environment_states[1:]]
-        directions = [compute_directions(o) for o in orientations][50:] # 50 = 10 seconds of grace period
+        directions = [compute_directions(o) for o in orientations][1:]
 
         vertical_limit = math.sin(vertical_angle_limit)
 
