@@ -266,9 +266,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
             if len(body.find_active_hinges()) <= 0:
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
-                params, final_fitness, starting_fitness = await learn_controller(body, self.generation_index, body_num)
-                genotypes[body_num].brain.internal_params = params[0]
-                genotypes[body_num].brain.external_params = params[1]
+                learned_params, final_fitness, starting_fitness = await learn_controller(body, self.generation_index, body_num)
+                genotypes[body_num].brain.genotype = learned_params
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
