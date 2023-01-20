@@ -39,7 +39,6 @@ from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimiz
 from revolve2.core.physics.environment_actor_controller import (
     EnvironmentActorController,
 )
-from config import *
 import logging
 
 class Optimizer(EAOptimizer[Genotype, float]):

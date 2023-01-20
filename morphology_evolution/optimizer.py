@@ -37,7 +37,6 @@ from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimiz
 from revolve2.core.physics.environment_actor_controller import (
     EnvironmentActorController,
 )
-from config import *
 import logging
 
 class Optimizer(EAOptimizer[Genotype, float]):
@@ -257,9 +256,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
         starting_fitnesses = []
 
         body_genotypes = [genotype.body for genotype in genotypes]
-        brain_genotypes = [genotype.brain.genotype for genotype in genotypes]
 
-        for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
+        for body_num, body_genotype in enumerate(body_genotypes):
             body = body_develop(body_genotype)
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0
@@ -269,7 +267,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
                 params, final_fitness, starting_fitness = await learn_controller(body, self.generation_index, body_num)
-                genotypes[body_num].brain.genotype = params
+                genotypes[body_num].brain.internal_params = params[0]
+                genotypes[body_num].brain.external_params = params[1]
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 

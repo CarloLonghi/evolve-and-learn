@@ -264,7 +264,7 @@ class Optimizer(RevDEOptimizer):
         total_angle = 0.0
 
         orientations = [env_state.actor_states[0].orientation for env_state in results.environment_states[1:]]
-        directions = [compute_directions(o) for o in orientations][50:] # 50 = 10 seconds of grace period
+        directions = [compute_directions(o) for o in orientations][1:]
 
         vertical_limit = math.sin(vertical_angle_limit)
 
