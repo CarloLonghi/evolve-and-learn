@@ -39,6 +39,8 @@ from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimiz
 from revolve2.core.physics.environment_actor_controller import (
     EnvironmentActorController,
 )
+from revolve2.core.modular_robot.brains import (
+    BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 import logging
 
 class Optimizer(EAOptimizer[Genotype, float]):
@@ -262,16 +264,27 @@ class Optimizer(EAOptimizer[Genotype, float]):
         starting_fitnesses = []
 
         body_genotypes = [genotype.body for genotype in genotypes]
-        brain_genotypes = [genotype.brain.genotype for genotype in genotypes]
+        brain_genotypes = [genotype.brain for genotype in genotypes]
 
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
-            hinges = body.find_active_hinges()
+            _, dof_ids = body.to_actor()
+            active_hinges_unsorted = body.find_active_hinges()
+            active_hinge_map = {
+                active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+            }
+            active_hinges = [active_hinge_map[id] for id in dof_ids]
+            cpg_network_structure = make_cpg_network_structure_neighbour(
+                active_hinges
+            )
             brain_params = []
-            for hinge in hinges:
+            for hinge in active_hinges:
                 pos = body.grid_position(hinge)
-                brain_params.append(brain_genotype[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
+                brain_params.append(brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
                                             self._grid_size**3 / 2)])
+            for _ in cpg_network_structure.connections:
+                brain_params.append(0.)
+                
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0
             starting_fitness = 0.0
@@ -280,10 +293,14 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
                 learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self.generation_index, body_num)
-                for hinge, learned_weight in zip(hinges, learned_params):
+                for hinge, learned_weight in zip(active_hinges, learned_params[:len(active_hinges)]):
                     pos = body.grid_position(hinge)
-                    brain_genotype[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
+                    brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
                                             self._grid_size**3 / 2)] = learned_weight
+
+                external_params = np.zeros(shape=len(cpg_network_structure.connections))
+                external_params = learned_params[len(active_hinges):]
+                brain_genotype.external_params = external_params
 
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
