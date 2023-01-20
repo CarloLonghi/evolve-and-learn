@@ -156,8 +156,9 @@ class Optimizer(RevDEOptimizer):
             active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
         }
         active_hinges = [active_hinge_map[id] for id in self._dof_ids]
-        cpgs = [Cpg(i) for i, _ in enumerate(active_hinges)]
-        self._cpg_network_structure = CpgNetworkStructure(cpgs, set())
+        self._cpg_network_structure = make_cpg_network_structure_neighbour(
+            active_hinges
+        )
 
 
     def _init_runner(self, num_simulators: int = 1) -> None:
