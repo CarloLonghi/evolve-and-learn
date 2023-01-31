@@ -252,7 +252,7 @@ class Optimizer(RevDEOptimizer):
             beta = gamma * math.cos(theta)
             # check to prevent that the robot goes further than the target
             max_beta = compute_distance(trajectory[reached_target_counter], trajectory[reached_target_counter+1])
-            beta = max(beta, max_beta)
+            beta = min(beta, max_beta)
             
             path_len = sum(path_length) - sum(path_length[:starting_point])
             omega = 0.01

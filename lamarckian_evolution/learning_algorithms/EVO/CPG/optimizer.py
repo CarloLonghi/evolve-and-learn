@@ -246,15 +246,18 @@ class Optimizer(RevDEOptimizer):
         if reached_target_counter == len(targets):
             return fitness
         else:
-            delta = math.atan2(coordinates[-1][1], coordinates[-1][0])
-            target_direction = math.atan2(targets[reached_target_counter][1], targets[reached_target_counter][0])
-            theta = abs(delta - target_direction)
-            gamma = compute_distance(coordinates[-1], coordinates[starting_point])
+            new_origin = trajectory[reached_target_counter]
+            delta = math.atan2(coordinates[-1][1] - new_origin[1], coordinates[-1][0] - new_origin[0])
+            target_direction = math.atan2(targets[reached_target_counter][1] - new_origin[1], targets[reached_target_counter][0] - new_origin[0])
+            theta = abs(((delta - target_direction) + math.pi) % (2*math.pi) - math.pi)
+            gamma = compute_distance(coordinates[-1], trajectory[reached_target_counter])
             alpha = gamma * math.sin(theta)
             beta = gamma * math.cos(theta)
+            
             # check to prevent that the robot goes further than the target
-            if beta > math.sqrt(2):
-                beta = math.sqrt(2)
+            max_beta = compute_distance(trajectory[reached_target_counter], trajectory[reached_target_counter+1])
+            beta = min(beta, max_beta)
+            
             path_len = sum(path_length) - sum(path_length[:starting_point])
             omega = 0.01
             epsilon = 10e-10
@@ -262,6 +265,7 @@ class Optimizer(RevDEOptimizer):
             fitness += (abs(beta)/(path_len + epsilon)) * (beta/(math.degrees(theta) + 1.0) - omega * alpha)
 
             return fitness
+
 
     @staticmethod
     def _calculate_panoramic_rotation(results, vertical_angle_limit = math.pi/4) -> float:

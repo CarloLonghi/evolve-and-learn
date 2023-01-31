@@ -135,14 +135,14 @@ class LocalRunner(Runner):
         results.environment_states.append(
             EnvironmentState(0.0, cls._get_actor_states(env_descr, data, model))
         )
-
+        save_pos = True
         while (time := data.time) < simulation_time:
             # do control if it is time
             if time >= last_control_time + control_step:
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos)
+                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos, save_pos)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
@@ -151,6 +151,7 @@ class LocalRunner(Runner):
                     for target in actor_target[1]
                 ]
                 cls._set_dof_targets(data, targets)
+                save_pos = False
 
             # sample state if it is time
             if time >= last_sample_time + sample_step:

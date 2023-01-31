@@ -26,7 +26,7 @@ import argparse
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
     """Run the script."""
-    db = open_async_database_sqlite('database/')
+    db = open_async_database_sqlite('darwinian_database/')
     async with AsyncSession(db) as session:
         individuals = (
             (
@@ -62,7 +62,6 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         genotype = (await GenotypeSerializer.from_database(session, [genotype_db.id]))[0]
 
         body = body_develop(genotype.body)
-        params = brain_develop(genotype.brain)
 
         actor, dof_ids = body.to_actor()
         active_hinges_unsorted = body.find_active_hinges()
@@ -73,9 +72,16 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
 
         cpg_network_structure = make_cpg_network_structure_neighbour(active_hinges)
 
+        brain_params = []
+        for hinge in active_hinges:
+            pos = body.grid_position(hinge)
+            brain_params.append(genotype.brain.internal_params[int(pos[0] + pos[1] * 22 + pos[2] * 22**2 + 22**3 / 2)])
+        for connection in genotype.brain.external_params:
+            brain_params.append(connection)
+
         initial_state = cpg_network_structure.make_uniform_state(0.5 * math.pi / 2.0)
         weight_matrix = (
-            cpg_network_structure.make_connection_weights_matrix_from_params(params)
+            cpg_network_structure.make_connection_weights_matrix_from_params(brain_params)
         )
         dof_ranges = cpg_network_structure.make_uniform_dof_ranges(1.0)
         brain = BrainCpgNetworkStatic(

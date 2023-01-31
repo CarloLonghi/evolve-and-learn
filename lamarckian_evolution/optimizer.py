@@ -64,7 +64,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
     _control_frequency: float
 
     _num_generations: int
-
     _grid_size: int
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
@@ -282,8 +281,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 pos = body.grid_position(hinge)
                 brain_params.append(brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
                                             self._grid_size**3 / 2)])
+
             for _ in cpg_network_structure.connections:
-                brain_params.append(0.)
+                brain_params.append(np.random.standard_normal(1)[0])
                 
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0

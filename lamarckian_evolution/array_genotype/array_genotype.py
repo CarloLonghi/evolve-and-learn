@@ -33,7 +33,7 @@ def random_v1(
         np.random.PCG64(rng.randint(0, 2 ** 63))
     )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
     internal_params = nprng.standard_normal(length)
-    external_params = np.zeros(shape=1)
+    external_params = nprng.standard_normal(1)
     return ArrayGenotype(internal_params, external_params)
 
 
