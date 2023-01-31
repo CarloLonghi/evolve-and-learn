@@ -370,9 +370,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__db_id,
             )
             self.__latest_fitnesses = initial_fitnesses
-            for i, ind in enumerate(self.__latest_population):
-                ind.genotype = new_genotypes[i]
             initial_population = self.__latest_population
+            for i, ind in enumerate(initial_population):
+                ind.genotype = new_genotypes[i]
             async with AsyncSession(self.__database) as session:
                 async with session.begin():
                     await self.__save_generation_using_session(
@@ -414,14 +414,24 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__db_id
             )
 
-            # combine to create list of individuals
-            new_individuals = [
+            # create individuals with learned controllers
+            new_learned_individuals = [
                 _Individual(
                     -1,  # placeholder until later
                     genotype,
                     [self.__latest_population[i].id for i in parent_indices],
                 )
                 for parent_indices, genotype in zip(parent_selections, new_genotypes)
+            ]
+
+            # create individuals with original controllers
+            new_individuals = [
+                _Individual(
+                    -1,  # placeholder until later
+                    genotype,
+                    [self.__latest_population[i].id for i in parent_indices],
+                )
+                for parent_indices, genotype in zip(parent_selections, offspring)
             ]
 
             # let user select survivors between old and new individuals
@@ -432,8 +442,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             )
 
             # set ids for new individuals
-            for individual in new_individuals:
-                individual.id = self.__gen_next_individual_id()
+            for (individual, learned_individual) in zip(new_individuals, new_learned_individuals):
+                id = self.__gen_next_individual_id()
+                individual.id = id
+                learned_individual.id = id
 
             # combine old and new and store as the new generation
             self.__latest_population = [
@@ -451,7 +463,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                         session,
                         initial_population,
                         initial_fitnesses,
-                        new_individuals,
+                        new_learned_individuals,
                         new_fitnesses,
                     )
                     self._on_generation_checkpoint(session)
@@ -620,26 +632,26 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             session, [i.genotype for i in new_individuals]
         )
         assert len(genotype_ids) == len(new_individuals)
-        starting_fitness_ids2: List[Optional[int]]
-        final_fitness_ids2: List[Optional[int]]
+        new_starting_fitness_ids: List[Optional[int]]
+        new_final_fitness_ids: List[Optional[int]]
         if new_fitnesses is not None:
-            starting_fitness_ids2 = [
+            new_starting_fitness_ids = [
                 f
                 for f in await self.__fitness_serializer.to_database(
                     session, new_fitnesses[0]
                 )
             ]  # this extra comprehension is useless but it stops mypy from complaining
-            assert len(starting_fitness_ids2) == len(new_fitnesses[0])
-            final_fitness_ids2 = [
+            assert len(new_starting_fitness_ids) == len(new_fitnesses[0])
+            new_final_fitness_ids = [
                 f
                 for f in await self.__fitness_serializer.to_database(
                     session, new_fitnesses[1]
                 )
             ]  # this extra comprehension is useless but it stops mypy from complaining
-            assert len(final_fitness_ids2) == len(new_fitnesses[1])
+            assert len(new_final_fitness_ids) == len(new_fitnesses[1])
         else:
-            starting_fitness_ids2 = [None for _ in range(len(new_individuals))]
-            final_fitness_ids2 = [None for _ in range(len(new_individuals))]
+            new_starting_fitness_ids = [None for _ in range(len(new_individuals))]
+            new_final_fitness_ids = [None for _ in range(len(new_individuals))]
 
         bodies = [body_develop(ind.genotype.body) for ind in new_individuals]
 
@@ -668,7 +680,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     symmetry = mm.symmetry,
                     branching = mm.branching
                 )
-                for i, g_id, s_id, f_id, mm in zip(new_individuals, genotype_ids, starting_fitness_ids2, final_fitness_ids2, measures)
+                for i, g_id, s_id, f_id, mm in zip(new_individuals, genotype_ids, new_starting_fitness_ids, new_final_fitness_ids, measures)
             ]
         )
 

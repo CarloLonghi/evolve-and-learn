@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
 
-async def main(body, gen, num) -> None:
+async def main(body, brain, gen, num) -> None:
     """Run the optimization process."""
 
     POPULATION_SIZE = 10
@@ -50,6 +50,7 @@ async def main(body, gen, num) -> None:
         rng=rng,
         population_size=POPULATION_SIZE,
         robot_body=body,
+        inherited_brain=brain,
         simulation_time=SIMULATION_TIME,
         sampling_frequency=SAMPLING_FREQUENCY,
         control_frequency=CONTROL_FREQUENCY,

@@ -49,6 +49,7 @@ class Optimizer(RevDEOptimizer):
         rng: Random,
         population_size: int,
         robot_body: Body,
+        inherited_brain: List,
         simulation_time: int,
         sampling_frequency: float,
         control_frequency: float,
@@ -77,10 +78,10 @@ class Optimizer(RevDEOptimizer):
         self._body = robot_body
         self._init_actor_and_cpg_network_structure()
 
-        nprng = np.random.Generator(
-            np.random.PCG64(rng.randint(0, 2**63))
-        )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
-        initial_population = nprng.standard_normal((population_size, self._cpg_network_structure.num_connections))
+        inherited_brain = np.array(inherited_brain)
+        initial_population = np.repeat(np.expand_dims(inherited_brain, axis=0), population_size, axis=0)
+        gaussian_noise = np.random.normal(scale=0.5, size=[len(initial_population)-1, inherited_brain.shape[0]])
+        initial_population[1:] += gaussian_noise
 
         await super().ainit_new(
             rng=rng,
@@ -242,15 +243,17 @@ class Optimizer(RevDEOptimizer):
         if reached_target_counter == len(targets):
             return fitness
         else:
-            delta = math.atan2(coordinates[-1][1], coordinates[-1][0])
-            target_direction = math.atan2(targets[reached_target_counter][1], targets[reached_target_counter][0])
-            theta = abs(delta - target_direction)
-            gamma = compute_distance(coordinates[-1], coordinates[starting_point])
+            new_origin = trajectory[reached_target_counter]
+            delta = math.atan2(coordinates[-1][1] - new_origin[1], coordinates[-1][0] - new_origin[0])
+            target_direction = math.atan2(targets[reached_target_counter][1] - new_origin[1], targets[reached_target_counter][0] - new_origin[0])
+            theta = abs(((delta - target_direction) + math.pi) % (2*math.pi) - math.pi)
+            gamma = compute_distance(coordinates[-1], trajectory[reached_target_counter])
             alpha = gamma * math.sin(theta)
             beta = gamma * math.cos(theta)
             # check to prevent that the robot goes further than the target
-            if beta > math.sqrt(2):
-                beta = math.sqrt(2)
+            max_beta = compute_distance(trajectory[reached_target_counter], trajectory[reached_target_counter+1])
+            beta = max(beta, max_beta)
+            
             path_len = sum(path_length) - sum(path_length[:starting_point])
             omega = 0.01
             epsilon = 10e-10

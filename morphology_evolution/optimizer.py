@@ -6,6 +6,7 @@ from random import Random
 from typing import List, Tuple
 
 import multineat
+import numpy as np
 import revolve2.core.optimization.ea.generic_ea.population_management as population_management
 import revolve2.core.optimization.ea.generic_ea.selection as selection
 import sqlalchemy
@@ -22,6 +23,8 @@ from revolve2.core.physics.running import (
     PosedActor,
     Runner,
 )
+from revolve2.core.modular_robot.brains import (
+    BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from learning_algorithms.EVO.CPG.optimize import main as learn_controller
 from revolve2.runners.mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -60,6 +63,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
     _control_frequency: float
 
     _num_generations: int
+    _grid_size: int
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -75,6 +79,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         control_frequency: float,
         num_generations: int,
         offspring_size: int,
+        grid_size: int
     ) -> None:
         """
         Initialize this class async.
@@ -115,6 +120,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
+        self._grid_size = grid_size
 
         # create database structure if not exists
         # TODO this works but there is probably a better way
@@ -136,6 +142,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         control_frequency: float,
         num_generations: int,
         offspring_size: int,
+        grid_size: int
     ) -> bool:
         """
         Try to initialize this class async from a database.
@@ -200,6 +207,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
+        self._grid_size = grid_size
 
         return True
 
@@ -255,10 +263,29 @@ class Optimizer(EAOptimizer[Genotype, float]):
         final_fitnesses = []
         starting_fitnesses = []
 
-        body_genotypes = [genotype.body for genotype in genotypes]
+        new_genotypes = genotypes.copy()
+        body_genotypes = [genotype.body for genotype in new_genotypes]
+        brain_genotypes = [genotype.brain for genotype in new_genotypes]
 
-        for body_num, body_genotype in enumerate(body_genotypes):
+        for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
+            _, dof_ids = body.to_actor()
+            active_hinges_unsorted = body.find_active_hinges()
+            active_hinge_map = {
+                active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+            }
+            active_hinges = [active_hinge_map[id] for id in dof_ids]
+            cpg_network_structure = make_cpg_network_structure_neighbour(
+                active_hinges
+            )
+            brain_params = []
+            for hinge in active_hinges:
+                pos = body.grid_position(hinge)
+                brain_params.append(brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
+                                            self._grid_size**3 / 2)])
+
+            for _ in cpg_network_structure.connections:
+                brain_params.append(np.random.standard_normal(1)[0])
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0
             starting_fitness = 0.0
@@ -266,12 +293,19 @@ class Optimizer(EAOptimizer[Genotype, float]):
             if len(body.find_active_hinges()) <= 0:
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
-                learned_params, final_fitness, starting_fitness = await learn_controller(body, self.generation_index, body_num)
-                genotypes[body_num].brain.genotype = learned_params
+                learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self.generation_index, body_num)
+                for hinge, learned_weight in zip(active_hinges, learned_params[:len(active_hinges)]):
+                    pos = body.grid_position(hinge)
+                    brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
+                                            self._grid_size**3 / 2)] = learned_weight
+
+                external_params = np.zeros(shape=len(cpg_network_structure.connections))
+                external_params = learned_params[len(active_hinges):]
+                brain_genotype.external_params = external_params
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
-        return (starting_fitnesses, final_fitnesses), genotypes
+        return (starting_fitnesses, final_fitnesses), new_genotypes
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:

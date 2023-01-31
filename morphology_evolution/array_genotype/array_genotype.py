@@ -22,7 +22,8 @@ from random import Random
 
 @dataclass
 class ArrayGenotype:
-    genotype: npt.NDArray[np.float_] # vector
+    internal_params: npt.NDArray[np.float_]
+    external_params: npt.NDArray[np.float_]
 
 def random_v1(
         length: int,
@@ -31,13 +32,14 @@ def random_v1(
     nprng = np.random.Generator(
         np.random.PCG64(rng.randint(0, 2 ** 63))
     )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
-    params = nprng.standard_normal(length)
-    return ArrayGenotype(params)
+    internal_params = nprng.standard_normal(length)
+    external_params = nprng.standard_normal(1)
+    return ArrayGenotype(internal_params, external_params)
 
 
 def develop(genotype: ArrayGenotype) -> Brain:
     #genotype.genotype.finalize()
-    return genotype.genotype
+    return np.concatenate([genotype.internal_params, genotype.external_params])
 
 class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
     @classmethod
@@ -54,18 +56,27 @@ class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
         cls, session: AsyncSession, objects: List[ArrayGenotype]
     ) -> List[int]:
 
-        db_obj_ids = []
+        int_ids = []
         for obj in objects:
             id = await Ndarray1xnSerializer.to_database(
-                session, [obj.genotype]
+                session, [obj.internal_params]
             )
-            db_obj_ids += id
-        assert len(db_obj_ids) == len(objects)
+            int_ids += id
+        assert len(int_ids) == len(objects)
+
+        ext_ids = []
+        for obj in objects:
+            id = await Ndarray1xnSerializer.to_database(
+                session, [obj.external_params]
+            )
+            ext_ids += id
+        assert len(ext_ids) == len(objects)
 
 
         dbgenotypes = [DbArrayGenotype() for _ in objects]
-        for i, id in enumerate(db_obj_ids):
-            dbgenotypes[i].array = id
+        for i, (int_id, ext_id) in enumerate(zip(int_ids, ext_ids)):
+            dbgenotypes[i].internal_weights = int_id
+            dbgenotypes[i].external_weights = ext_id
 
         session.add_all(dbgenotypes)
         await session.flush()
@@ -91,12 +102,14 @@ class ArrayGenotypeSerializer(Serializer[ArrayGenotype]):
             .all()
         )
 
-        param_ids = [a.array for a in arrays]
-        params = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in param_ids]
+        int_param_ids = [a.internal_weights for a in arrays]
+        ext_param_ids = [a.external_weights for a in arrays]
+        internal_params = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in int_param_ids]
+        external_params = [(await Ndarray1xnSerializer.from_database(session, [id]))[0] for id in ext_param_ids]
 
         genotypes: List[ArrayGenotype] = [
-            ArrayGenotype(np.array(param))
-            for param in params
+            ArrayGenotype(np.array(int_param), np.array(ext_param))
+            for int_param, ext_param in zip(internal_params, external_params)
         ]
 
         return genotypes

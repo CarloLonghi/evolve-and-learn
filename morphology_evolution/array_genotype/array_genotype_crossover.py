@@ -10,7 +10,6 @@ from revolve2.core.modular_robot import Module, Core
 
 def crossover(parent_a: ArrayGenotype,
               parent_b: ArrayGenotype,
-              p: [],
               crossover_prob: ArrayCrossoverConfig):
     """
     To implement the uniform crossover, the following python code can be used.
@@ -20,11 +19,11 @@ def crossover(parent_a: ArrayGenotype,
     https://medium.com/@samiran.bera/crossover-operator-the-heart-of-genetic-algorithm-6c0fdcb405c0
     """
 
-    p = np.random.rand(10)
-    for i in range(len(p)):
-        if p[i] < crossover_prob:
-            temp = parent_a
-            parent_a = parent_b
-            parent_b = temp
-    new_genotype = parent_b
-    return new_genotype  # or parent_a as the new genotype
+    prob_array = np.random.uniform(low=0, high=1.0, size=parent_a.internal_params.shape[0])
+    crossover_array = prob_array > crossover_prob
+    new_internal_params = np.copy(parent_a.internal_params)
+    new_internal_params[crossover_array] = parent_b.internal_params[crossover_array]
+    
+    new_genotype = ArrayGenotype(new_internal_params, np.zeros(shape=1))
+
+    return new_genotype 
