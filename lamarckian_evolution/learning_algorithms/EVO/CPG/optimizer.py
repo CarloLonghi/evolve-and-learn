@@ -232,12 +232,12 @@ class Optimizer(RevDEOptimizer):
 
         coordinates = [env_state.actor_states[0].position[:2] for env_state in results.environment_states]
         path_length = [compute_distance(coordinates[i-1], coordinates[i]) for i in range(1,len(coordinates))]
-        starting_point = 0
+        starting_idx = 0
         for idx, state in enumerate(coordinates[1:]):
             if reached_target_counter < len(targets) and check_target(state, targets[reached_target_counter], target_range):
-                distances.append(sum(path_length[:idx]) - sum(path_length[:starting_point]))
+                distances.append(sum(path_length[:idx]) - sum(path_length[:starting_idx]))
                 reached_target_counter += 1
-                starting_point = idx
+                starting_idx = idx
         
         fitness = reached_target_counter * math.sqrt(2)
         if reached_target_counter > 0:
@@ -258,9 +258,9 @@ class Optimizer(RevDEOptimizer):
             max_beta = compute_distance(trajectory[reached_target_counter], trajectory[reached_target_counter+1])
             beta = min(beta, max_beta)
             
-            path_len = sum(path_length) - sum(path_length[:starting_point])
+            path_len = sum(path_length) - sum(path_length[:starting_idx])
             omega = 0.01
-            epsilon = 10e-10
+            epsilon = 0.1
 
             fitness += (abs(beta)/(path_len + epsilon)) * (beta/(math.degrees(theta) + 1.0) - omega * alpha)
 
