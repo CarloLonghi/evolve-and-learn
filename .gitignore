@@ -1,5 +1,5 @@
 __pycache__
-database
+*database
 notes.txt
 .vscode
 ppo_model_states
