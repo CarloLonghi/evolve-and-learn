@@ -262,8 +262,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
         final_fitnesses = []
         starting_fitnesses = []
 
-        body_genotypes = [genotype.body for genotype in genotypes]
-        brain_genotypes = [genotype.brain for genotype in genotypes]
+        new_genotypes = genotypes.copy()
+        body_genotypes = [genotype.body for genotype in new_genotypes]
+        brain_genotypes = [genotype.brain for genotype in new_genotypes]
 
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
@@ -305,7 +306,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
-        return (starting_fitnesses, final_fitnesses), genotypes
+        return (starting_fitnesses, final_fitnesses), new_genotypes
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
