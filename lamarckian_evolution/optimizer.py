@@ -240,9 +240,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
     def _must_do_next_gen(self) -> bool:
         return self.generation_index != self._num_generations
 
-    def _crossover(self, parents: List[Genotype]) -> Genotype:
+    def _crossover(self, parents: List[Genotype], first_best: bool) -> Genotype:
         assert len(parents) == 2
-        return crossover(parents[0], parents[1], self._rng)
+        return crossover(parents[0], parents[1], self._rng, first_best)
 
     def _mutate(self, genotype: Genotype) -> Genotype:
         return mutate(genotype, self._innov_db_body, self._innov_db_brain, self._rng)
@@ -282,9 +282,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 pos = body.grid_position(hinge)
                 brain_params.append(brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
                                             self._grid_size**3 / 2)])
-
-            for _ in cpg_network_structure.connections:
-                brain_params.append(np.random.standard_normal(1)[0])
                 
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0
@@ -298,10 +295,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
                     pos = body.grid_position(hinge)
                     brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
                                             self._grid_size**3 / 2)] = learned_weight
-
-                external_params = np.zeros(shape=len(cpg_network_structure.connections))
-                external_params = learned_params[len(active_hinges):]
-                brain_genotype.external_params = external_params
 
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
