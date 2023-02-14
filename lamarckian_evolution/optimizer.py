@@ -65,6 +65,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
     _num_generations: int
     _grid_size: int
+    _num_potential_joints: int
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -122,6 +123,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._control_frequency = control_frequency
         self._num_generations = num_generations
         self._grid_size = grid_size
+        self._num_potential_joints = ((grid_size**2)-1)
 
         # create database structure if not exists
         # TODO this works but there is probably a better way
@@ -253,11 +255,6 @@ class Optimizer(EAOptimizer[Genotype, float]):
         database: AsyncEngine,
         db_id: DbId,
     ) -> Tuple[List[float], List[Genotype]]:
-        batch = Batch(
-            simulation_time=self._simulation_time,
-            sampling_frequency=self._sampling_frequency,
-            control_frequency=self._control_frequency,
-        )
 
         final_fitnesses = []
         starting_fitnesses = []
@@ -280,8 +277,21 @@ class Optimizer(EAOptimizer[Genotype, float]):
             brain_params = []
             for hinge in active_hinges:
                 pos = body.grid_position(hinge)
-                brain_params.append(brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
-                                            self._grid_size**3 / 2)])
+                cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
+                brain_params.append(brain_genotype.internal_params[
+                    cpg_idx*self._num_potential_joints - (cpg_idx*(cpg_idx-1)//2) + cpg_idx
+                ])
+
+            for connection in cpg_network_structure.connections:
+                first_hinge = connection.cpg_index_highest.index
+                first_pos = body.grid_position(active_hinges[first_hinge])
+                first_cpg_idx = int(first_pos[0] + first_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                second_hinge = connection.cpg_index_lowest.index
+                second_pos = body.grid_position(active_hinges[second_hinge])
+                second_cpg_idx = int(second_pos[0] + second_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                brain_params.append(brain_genotype.internal_params[
+                    first_cpg_idx*self._num_potential_joints - (first_cpg_idx*(first_cpg_idx-1)//2) + second_cpg_idx
+                ])
                 
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
             final_fitness = 0.0
@@ -293,9 +303,21 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self.generation_index, body_num)
                 for hinge, learned_weight in zip(active_hinges, learned_params[:len(active_hinges)]):
                     pos = body.grid_position(hinge)
-                    brain_genotype.internal_params[int(pos[0] + pos[1] * self._grid_size + pos[2] * self._grid_size**2 + 
-                                            self._grid_size**3 / 2)] = learned_weight
+                    cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
+                    brain_genotype.internal_params[
+                        cpg_idx*self._num_potential_joints - (cpg_idx*(cpg_idx-1)//2) + cpg_idx
+                    ] = learned_weight
 
+                for connection, connection_weight in zip(cpg_network_structure.connections, learned_params[len(active_hinges):]):
+                    first_hinge = connection.cpg_index_highest.index
+                    first_pos = body.grid_position(active_hinges[first_hinge])
+                    first_cpg_idx = int(first_pos[0] + first_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                    second_hinge = connection.cpg_index_lowest.index
+                    second_pos = body.grid_position(active_hinges[second_hinge])
+                    second_cpg_idx = int(second_pos[0] + second_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                    brain_genotype.internal_params[
+                        first_cpg_idx*self._num_potential_joints - (first_cpg_idx*(first_cpg_idx-1)//2) + second_cpg_idx
+                    ] = connection_weight
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
