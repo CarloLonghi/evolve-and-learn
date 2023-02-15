@@ -243,9 +243,9 @@ class Optimizer(EAOptimizer[Genotype, float]):
     def _must_do_next_gen(self) -> bool:
         return self.generation_index != self._num_generations
 
-    def _crossover(self, parents: List[Genotype]) -> Genotype:
+    def _crossover(self, parents: List[Genotype], first_best: bool) -> Genotype:
         assert len(parents) == 2
-        return crossover(parents[0], parents[1], self._rng)
+        return crossover(parents[0], parents[1], self._rng, first_best)
 
     def _mutate(self, genotype: Genotype) -> Genotype:
         return mutate(genotype, self._innov_db_body, self._innov_db_brain, self._rng)
@@ -280,18 +280,20 @@ class Optimizer(EAOptimizer[Genotype, float]):
                 pos = body.grid_position(hinge)
                 cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
                 brain_params.append(brain_genotype.internal_params[
-                    cpg_idx*self._num_potential_joints - (cpg_idx*(cpg_idx-1)//2) + cpg_idx
+                    cpg_idx*13
                 ])
 
             for connection in cpg_network_structure.connections:
-                first_hinge = connection.cpg_index_highest.index
-                first_pos = body.grid_position(active_hinges[first_hinge])
-                first_cpg_idx = int(first_pos[0] + first_pos[1] * self._grid_size + self._grid_size**2 / 2)
-                second_hinge = connection.cpg_index_lowest.index
-                second_pos = body.grid_position(active_hinges[second_hinge])
-                second_cpg_idx = int(second_pos[0] + second_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                hinge1 = connection.cpg_index_highest.index
+                pos1 = body.grid_position(active_hinges[hinge1])
+                cpg_idx1 = int(pos1[0] + pos1[1] * self._grid_size + self._grid_size**2 / 2)
+                hinge2 = connection.cpg_index_lowest.index
+                pos2 = body.grid_position(active_hinges[hinge2])
+                cpg_idx2 = int(pos2[0] + pos2[1] * self._grid_size + self._grid_size**2 / 2)
+                rel_pos = relative_pos(pos1[:2], pos2[:2])
+                idx = max(cpg_idx1, cpg_idx2)
                 brain_params.append(brain_genotype.internal_params[
-                    first_cpg_idx*self._num_potential_joints - (first_cpg_idx*(first_cpg_idx-1)//2) + second_cpg_idx
+                    idx*13 + rel_pos
                 ])
 
             logging.info("Starting optimization of the controller for morphology num: " + str(body_num))
@@ -306,18 +308,20 @@ class Optimizer(EAOptimizer[Genotype, float]):
                     pos = body.grid_position(hinge)
                     cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
                     brain_genotype.internal_params[
-                        cpg_idx*self._num_potential_joints - (cpg_idx*(cpg_idx-1)//2) + cpg_idx
+                        cpg_idx*13
                     ] = learned_weight
 
                 for connection, connection_weight in zip(cpg_network_structure.connections, learned_params[len(active_hinges):]):
-                    first_hinge = connection.cpg_index_highest.index
-                    first_pos = body.grid_position(active_hinges[first_hinge])
-                    first_cpg_idx = int(first_pos[0] + first_pos[1] * self._grid_size + self._grid_size**2 / 2)
-                    second_hinge = connection.cpg_index_lowest.index
-                    second_pos = body.grid_position(active_hinges[second_hinge])
-                    second_cpg_idx = int(second_pos[0] + second_pos[1] * self._grid_size + self._grid_size**2 / 2)
+                    hinge1 = connection.cpg_index_highest.index
+                    pos1 = body.grid_position(active_hinges[hinge1])
+                    cpg_idx1 = int(pos1[0] + pos1[1] * self._grid_size + self._grid_size**2 / 2)
+                    hinge2 = connection.cpg_index_lowest.index
+                    pos2 = body.grid_position(active_hinges[hinge2])
+                    cpg_idx2 = int(pos2[0] + pos2[1] * self._grid_size + self._grid_size**2 / 2)
+                    rel_pos = relative_pos(pos1[:2], pos2[:2])
+                    idx = max(cpg_idx1, cpg_idx2)
                     brain_genotype.internal_params[
-                        first_cpg_idx*self._num_potential_joints - (first_cpg_idx*(first_cpg_idx-1)//2) + second_cpg_idx
+                        idx*13 + rel_pos
                     ] = connection_weight
 
             final_fitnesses.append(final_fitness)
@@ -376,3 +380,12 @@ class DbOptimizerState(DbBase):
     sampling_frequency = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
     control_frequency = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
     num_generations = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
+
+def relative_pos(pos1, pos2):
+    dx = pos2[0] - pos1[0]
+    dy = pos2[1] - pos1[1]
+
+    mapping = {(1,0):1, (1,1):2, (0,1):3, (-1,0):4, (-1,-1):5, (0,-1):6,
+                (-1,1):7, (1,-1):8, (2,0):9, (0,2):10, (-2,0):11, (0,-2):12}
+    
+    return mapping[(dx,dy)]
