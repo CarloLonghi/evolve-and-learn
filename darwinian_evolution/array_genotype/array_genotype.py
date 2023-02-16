@@ -32,7 +32,7 @@ def random_v1(
         np.random.PCG64(rng.randint(0, 2 ** 63))
     )  # rng is currently not numpy, but this would be very convenient. do this until that is resolved.
     num_potential_joints = ((grid_size**2)-1)
-    genotype_len = num_potential_joints*13
+    genotype_len = num_potential_joints*14
     internal_params = nprng.standard_normal(genotype_len)
     return ArrayGenotype(internal_params)
 
