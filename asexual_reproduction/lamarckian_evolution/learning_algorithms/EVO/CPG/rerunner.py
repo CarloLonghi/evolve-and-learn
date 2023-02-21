@@ -7,13 +7,14 @@ from .environment_steering_controller import EnvironmentActorController
 from revolve2.core.physics.running import Batch, Environment, PosedActor
 import math
 from revolve2.core.physics.running import RecordSettings
-import numpy as np
 from typing import Optional
+import numpy as np
+from matplotlib import pyplot as plt
 
 class ModularRobotRerunner:
     """Rerunner for a single robot that uses Mujoco."""
 
-    async def rerun(self, robot: ModularRobot, control_frequency: float, record_dir: Optional[str], record: bool = False) -> None:
+    async def rerun(self, robot: ModularRobot, control_frequency: float, record_dir: Optional[str] = 'vid', record: bool = False, headless: bool = False) -> None:
         """
         Rerun a single robot.
 
@@ -21,14 +22,14 @@ class ModularRobotRerunner:
         :param control_frequency: Control frequency for the simulation. See `Batch` class from physics running.
         """
         batch = Batch(
-            simulation_time=30,
+            simulation_time=60,
             sampling_frequency=5,
             control_frequency=control_frequency,
         )
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment(EnvironmentActorController(self._controller, [(1.0, -1.0), (0.0, -2.0)], steer=False))
+        env = Environment(EnvironmentActorController(self._controller, [(1.0, -1.0), (0.0, -2.0)], steer=True))
         bounding_box = actor.calc_aabb()
         env.actors.append(
             PosedActor(
@@ -40,27 +41,18 @@ class ModularRobotRerunner:
         )
         batch.environments.append(env)
 
-        runner = LocalRunner(headless=False)
+        runner = LocalRunner(headless=headless)
         rs = None
         if record:
             rs = RecordSettings(record_dir)
-        await runner.run_batch(batch, rs)
+        res = await runner.run_batch(batch, rs)
+        traj_x = [env_state.actor_states[0].position[0] for env_state in res.environment_results[0].environment_states]
+        traj_y = [env_state.actor_states[0].position[1] for env_state in res.environment_results[0].environment_states]
+        return traj_x, traj_y
 
 
-def check_target(coord, target, target_range):
-    if abs(coord[0]-target[0]) < target_range and abs(coord[1]-target[1]) < target_range:
-        return True
-    else:
-        return False
-
-def compute_distance(point_a, point_b):
-    return math.sqrt(
-        (point_a[0] - point_b[0]) ** 2 +
-        (point_a[1] - point_b[1]) ** 2
-    )
 
 if __name__ == "__main__":
     print(
         "This file cannot be ran as a script. Import it and use the contained classes instead."
     )
-
