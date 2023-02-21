@@ -26,7 +26,7 @@ import argparse
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
     """Run the script."""
-    db = open_async_database_sqlite('lamarckian_database/')
+    db = open_async_database_sqlite('lamarc_asex_database/')
     async with AsyncSession(db) as session:
         individuals = (
             (
@@ -81,7 +81,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         for hinge in active_hinges:
             pos = body.grid_position(hinge)
             cpg_idx = int(pos[0] + pos[1] * grid_size + grid_size**2 / 2)
-            brain_params.append(brain_genotype.internal_params[
+            brain_params.append(brain_genotype.params_array[
                 cpg_idx*14
             ])
 
@@ -94,7 +94,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
             cpg_idx2 = int(pos2[0] + pos2[1] * grid_size + grid_size**2 / 2)
             rel_pos = relative_pos(pos1[:2], pos2[:2])
             idx = max(cpg_idx1, cpg_idx2)
-            brain_params.append(brain_genotype.internal_params[
+            brain_params.append(brain_genotype.params_array[
                 idx*14 + rel_pos
             ])
 

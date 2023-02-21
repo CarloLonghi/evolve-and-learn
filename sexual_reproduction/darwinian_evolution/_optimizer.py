@@ -370,9 +370,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__db_id,
             )
             self.__latest_fitnesses = initial_fitnesses
-            for i, ind in enumerate(self.__latest_population):
-                ind.genotype = new_genotypes[i]
             initial_population = self.__latest_population
+            for i, ind in enumerate(initial_population):
+                ind.genotype = new_genotypes[i]
             async with AsyncSession(self.__database) as session:
                 async with session.begin():
                     await self.__save_generation_using_session(
@@ -414,14 +414,24 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 self.__db_id
             )
 
-            # combine to create list of individuals
-            new_individuals = [
+            # create individuals with learned controllers
+            new_learned_individuals = [
                 _Individual(
                     -1,  # placeholder until later
                     genotype,
                     [self.__latest_population[i].id for i in parent_indices],
                 )
                 for parent_indices, genotype in zip(parent_selections, new_genotypes)
+            ]
+
+            # create individuals with original controllers
+            new_individuals = [
+                _Individual(
+                    -1,  # placeholder until later
+                    genotype,
+                    [self.__latest_population[i].id for i in parent_indices],
+                )
+                for parent_indices, genotype in zip(parent_selections, offspring)
             ]
 
             # let user select survivors between old and new individuals
@@ -432,8 +442,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             )
 
             # set ids for new individuals
-            for individual in new_individuals:
-                individual.id = self.__gen_next_individual_id()
+            for (individual, learned_individual) in zip(new_individuals, new_learned_individuals):
+                id = self.__gen_next_individual_id()
+                individual.id = id
+                learned_individual.id = id
 
             # combine old and new and store as the new generation
             self.__latest_population = [
@@ -451,7 +463,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                         session,
                         initial_population,
                         initial_fitnesses,
-                        new_individuals,
+                        new_learned_individuals,
                         new_fitnesses,
                     )
                     self._on_generation_checkpoint(session)
@@ -525,7 +537,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         )
         return parent_selections
 
-    def __safe_crossover(self, parents: List[Genotype], first_best: bool) -> Genotype:
+    def __safe_crossover(self, parents: List[Genotype], first_best:bool) -> Genotype:
         genotype = self._crossover(parents, first_best)
         assert type(genotype) == self.__genotype_type
         return genotype
@@ -647,7 +659,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         for ind, body in zip(new_individuals, bodies):
             render = Render()
             id = ind.id
-            img_path = f'lamarc_asex_database/body_images/generation_{self.generation_index}/individual_{id}.png'
+            img_path = f'darw_sex_database/body_images/generation_{self.generation_index}/individual_{id}.png'
             render.render_robot(body.core, img_path)
 
         # compute morphological measures
