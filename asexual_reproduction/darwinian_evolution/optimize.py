@@ -21,7 +21,7 @@ async def main() -> None:
 
     POPULATION_SIZE = 50
     OFFSPRING_SIZE = 25
-    NUM_GENERATIONS = 30
+    NUM_GENERATIONS = 29
 
     GRID_SIZE = 22
 
