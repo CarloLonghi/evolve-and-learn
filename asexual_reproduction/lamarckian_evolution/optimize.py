@@ -65,6 +65,7 @@ async def main() -> None:
         control_frequency=CONTROL_FREQUENCY,
         num_generations=NUM_GENERATIONS,
         offspring_size=OFFSPRING_SIZE,
+        grid_size=GRID_SIZE
     )
     if maybe_optimizer is not None:
         optimizer = maybe_optimizer
