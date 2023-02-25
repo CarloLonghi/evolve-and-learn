@@ -15,7 +15,7 @@ async def main() -> None:
     # number of initial mutations for body and brain CPPNWIN networks
     NUM_INITIAL_MUTATIONS = 10
 
-    SIMULATION_TIME = 60
+    SIMULATION_TIME = 40
     SAMPLING_FREQUENCY = 5
     CONTROL_FREQUENCY = 5
 
@@ -65,6 +65,7 @@ async def main() -> None:
         control_frequency=CONTROL_FREQUENCY,
         num_generations=NUM_GENERATIONS,
         offspring_size=OFFSPRING_SIZE,
+        grid_size=GRID_SIZE
     )
     if maybe_optimizer is not None:
         optimizer = maybe_optimizer
