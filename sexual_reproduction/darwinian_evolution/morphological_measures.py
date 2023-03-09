@@ -585,3 +585,16 @@ class MorphologicalMeasures:
         :returns: Symmetry measurement.
         """
         return max(self.xy_symmetry, self.xz_symmetry, self.yz_symmetry)
+
+    @property
+    def rel_num_limbs(self) -> float:
+        if self.num_modules >= 6:
+            lmax = (2*(self.num_modules-6))/3+((self.num_modules-6) % 3) + 4
+        else:
+            lmax = self.num_modules - 1
+
+        l = len(self.single_neighbour_bricks) + (self.num_active_hinges - len(self.double_neighbour_active_hinges))
+        if lmax > 0:
+            return l/lmax
+        else:
+            return 0
