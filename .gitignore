@@ -11,3 +11,6 @@ experiment*
 *.ipynb
 data*
 *videos
+*.mp4
+*.npy
+*.log

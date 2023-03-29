@@ -40,7 +40,6 @@ async def main() -> None:
 
     # random number generator
     rng = Random()
-    rng.seed(42)
 
     # unique database identifier for optimizer
     db_id = DbId.root("morphevo")

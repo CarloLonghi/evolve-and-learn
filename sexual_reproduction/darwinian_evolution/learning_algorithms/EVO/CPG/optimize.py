@@ -42,7 +42,6 @@ async def main(body, brain, gen, num) -> None:
 
     # random number generator
     rng = Random()
-    rng.seed(42)
 
     optimizer = await Optimizer.new(
         database=None,
