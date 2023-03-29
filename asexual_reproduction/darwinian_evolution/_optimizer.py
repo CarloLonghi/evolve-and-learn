@@ -756,4 +756,7 @@ class DbEAOptimizerIndividual(DbBase):
     rel_num_limbs = Column(Float, nullable=False)
     symmetry = Column(Float, nullable=False)
     branching = Column(Float, nullable=False)
+    coverage = Column(Float, nullable=False)
+    rel_num_bricks = Column(Float, nullable=False)
+    rel_num_hinges = Column(Float, nullable=False)
     
