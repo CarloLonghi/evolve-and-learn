@@ -20,6 +20,7 @@ from array_genotype.array_genotype import ArrayGenotypeSerializer as BrainSerial
 from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import develop_v1 as body_develop
 from revolve2.genotypes.cppnwin._genotype import GenotypeSerializer as BodySerializer
 from revolve2.actor_controllers.cpg import CpgNetworkStructure, Cpg
+from revolve2.standard_resources import terrains
 from typing import Optional
 import argparse
 
@@ -113,7 +114,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5, record_dir, record)
+    await rerunner.rerun(bot, 5, record_dir, record, terrain=terrains.flat())
 
 def relative_pos(pos1, pos2):
     dx = pos2[0] - pos1[0]

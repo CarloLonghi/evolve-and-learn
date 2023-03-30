@@ -19,8 +19,7 @@ from revolve2.core.physics.running import (ActorState, Batch,
 from .runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from array_genotype.array_genotype import ArrayGenotype
-from array_genotype.array_genotype_mutation import mutate as brain_mutation
+from revolve2.standard_resources import terrains
 
 class Optimizer(RevDEOptimizer):
     """
@@ -28,6 +27,8 @@ class Optimizer(RevDEOptimizer):
 
     Uses the generic EA optimizer as a base.
     """
+
+    _TERRAIN = terrains.flat()
 
     _body: Body
     _actor: Actor
@@ -197,6 +198,7 @@ class Optimizer(RevDEOptimizer):
 
             bounding_box = self._actor.calc_aabb()
             env = Environment(EnvironmentActorController(controller, self._target_points, steer=True))
+            env.static_geometries.extend(self._TERRAIN.static_geometry)
             env.actors.append(
                 PosedActor(
                     self._actor,

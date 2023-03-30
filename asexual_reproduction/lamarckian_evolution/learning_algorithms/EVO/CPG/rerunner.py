@@ -5,7 +5,7 @@ from revolve2.core.modular_robot import ModularRobot
 from .runner_mujoco import LocalRunner
 from .environment_steering_controller import EnvironmentActorController
 from revolve2.core.physics.running import Batch, Environment, PosedActor
-import math
+from revolve2.core.physics import Terrain
 from revolve2.core.physics.running import RecordSettings
 from typing import Optional
 import numpy as np
@@ -14,7 +14,13 @@ from matplotlib import pyplot as plt
 class ModularRobotRerunner:
     """Rerunner for a single robot that uses Mujoco."""
 
-    async def rerun(self, robot: ModularRobot, control_frequency: float, record_dir: Optional[str] = 'vid', record: bool = False, headless: bool = False) -> None:
+    async def rerun(self, 
+                    robot: ModularRobot, 
+                    control_frequency: float, 
+                    terrain: Terrain,
+                    record_dir: Optional[str] = 'vid', 
+                    record: bool = False, 
+                    headless: bool = False) -> None:
         """
         Rerun a single robot.
 
@@ -39,6 +45,7 @@ class ModularRobotRerunner:
                 [0.0 for _ in self._controller.get_dof_targets()],
             )
         )
+        env.static_geometries.extend(terrain.static_geometry)
         batch.environments.append(env)
 
         runner = LocalRunner(headless=headless)
