@@ -111,7 +111,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5, record_dir, record, terrain=terrains.flat())
+    await rerunner.rerun(bot, 5, terrains.flat(), record_dir, record)
 
 def relative_pos(pos1, pos2):
     dx = pos2[0] - pos1[0]

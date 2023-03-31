@@ -16,10 +16,7 @@ from revolve2.core.optimization.ea.generic_ea._database import (
 from _optimizer import DbEAOptimizerIndividual
 from genotype import DbGenotype, GenotypeSerializer, Genotype
 from revolve2.core.database.serializers import FloatSerializer
-from array_genotype.array_genotype import ArrayGenotypeSerializer as BrainSerializer, develop as brain_develop
-from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import develop_v1 as body_develop
-from revolve2.genotypes.cppnwin._genotype import GenotypeSerializer as BodySerializer
-from revolve2.actor_controllers.cpg import CpgNetworkStructure, Cpg
+from body_genotype_v2 import Develop as BodyDevelop
 from revolve2.standard_resources import terrains
 from typing import Optional
 import argparse
@@ -27,7 +24,7 @@ import argparse
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
     """Run the script."""
-    db = open_async_database_sqlite('lamarc_asex_database/')
+    db = open_async_database_sqlite('darw_asex_database/')
     async with AsyncSession(db) as session:
         individuals = (
             (
@@ -62,7 +59,8 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         )[0]
         genotype = (await GenotypeSerializer.from_database(session, [genotype_db.id]))[0]
 
-        body = body_develop(genotype.body)
+        body_develop = BodyDevelop(10, 10, genotype.body, genotype.random_seed)
+        body = body_develop.develop()[0]
 
         actor, dof_ids = body.to_actor()
         active_hinges_unsorted = body.find_active_hinges()
