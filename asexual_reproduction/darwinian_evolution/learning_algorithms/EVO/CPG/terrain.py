@@ -1,0 +1,87 @@
+from typing import Tuple
+from revolve2.core.physics import Terrain
+from revolve2.standard_resources.terrains import rugged_heightmap
+from revolve2.core.physics.running import geometry
+from pyrr import Quaternion, Vector3
+import numpy as np
+import numpy.typing as npt
+from noise import pnoise2
+
+def rugged_track(
+) -> Terrain:
+    
+    size = (10,10)
+    ruggedness = 0.1
+    granularity_multiplier = 1.
+
+    NUM_EDGES = 100  # arbitrary constant to get a nice number of edges
+    num_edges = (
+        int(NUM_EDGES * size[0] * granularity_multiplier),
+        int(NUM_EDGES * size[1] * granularity_multiplier),
+    )
+
+    rugged = track_heightmap(
+        size=size,
+        num_edges=num_edges,
+        density=1.5,
+    )
+    max_height = ruggedness
+    if max_height == 0.0:
+        heightmap = np.zeros(num_edges)
+        max_height = 1.0
+    else:
+        heightmap = (ruggedness * rugged) / ruggedness
+        
+    return Terrain(
+        static_geometry=[
+            geometry.Heightmap(
+                position=Vector3(),
+                orientation=Quaternion(),
+                size=Vector3([size[0], size[1], max_height]),
+                base_thickness=0.1 + ruggedness,
+                heights=heightmap,
+            ),
+        ]
+    )
+
+def track_heightmap(
+    size: Tuple[float, float],
+    num_edges: Tuple[int, int],
+    density: float = 1.0,
+) -> npt.NDArray[np.float_]:
+    
+    OCTAVE = 10
+    C1 = 4.0  # arbitrary constant to get nice noise
+
+    return np.fromfunction(
+        np.vectorize(
+            lambda y, x: terrain_map(y,x, size, num_edges, density),
+            otypes=[float],
+        ),
+        num_edges,
+        dtype=float,
+    )
+
+def terrain_map(y, x, size, num_edges, density):
+
+    OCTAVE = 10
+    C1 = 4.0  # arbitrary constant to get nice noise
+
+    X = x / num_edges[0] * 2.0 - 1.0
+    Y = y / num_edges[1] * 2.0 - 1.0
+
+    h = 0.
+
+    if ((X >= -0.03 and X < 0.05 and Y < 0.10 and Y >= -0.08)) or \
+        ((X >= 0.15 and X < 0.23 and Y < 0.18 and Y >= -0.00)):
+        h = pnoise2(
+        x / num_edges[0] * C1 * size[0] * density,
+        y / num_edges[1] * C1 * size[1] * density,
+        OCTAVE)
+    elif (X > -0.05 and X < 0.15 and Y < 0.10 and Y > -0.00) or \
+        (X < -0.03 or X > 0.23 or Y < -0.08 or Y > 0.18):
+        h = 5.0
+    else:
+        h = 0.0
+    
+    return h
