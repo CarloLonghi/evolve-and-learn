@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from array_genotype.array_genotype import ArrayGenotype
 from array_genotype.array_genotype_mutation import mutate as brain_mutation
 from revolve2.standard_resources import terrains
+from learning_algorithms.EVO.CPG.terrain import rugged_track
 
 class Optimizer(RevDEOptimizer):
     """
@@ -30,7 +31,7 @@ class Optimizer(RevDEOptimizer):
     Uses the generic EA optimizer as a base.
     """
 
-    _TERRAIN = terrains.flat()
+    _TERRAIN = rugged_track()
 
     _body: Body
     _actor: Actor
@@ -102,7 +103,7 @@ class Optimizer(RevDEOptimizer):
         self._sampling_frequency = sampling_frequency
         self._control_frequency = control_frequency
         self._num_generations = num_generations
-        self._target_points = [(1., -1.), (0., -2.)]
+        self._target_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -206,7 +207,7 @@ class Optimizer(RevDEOptimizer):
                     self._actor,
                     Vector3(
                         [
-                            0.0,
+                            0.5,
                             0.0,
                             bounding_box.size.z / 2.0 - bounding_box.offset.z,
                         ]

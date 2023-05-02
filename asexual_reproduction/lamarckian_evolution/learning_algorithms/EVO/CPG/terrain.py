@@ -72,16 +72,23 @@ def terrain_map(y, x, size, num_edges, density):
 
     h = 0.
 
-    if ((X >= -0.03 and X < 0.05 and Y < 0.10 and Y >= -0.08)) or \
-        ((X >= 0.15 and X < 0.23 and Y < 0.18 and Y >= -0.00)):
+    starting_x = -0.03
+    starting_y = -0.08
+    path_width = 0.06
+    path_len = 0.08
+    square_side = path_len + path_width
+    
+
+    if ((X >= starting_x and X < starting_x + path_len and Y >= starting_y and Y < starting_y + path_width)) or \
+        ((X >= starting_x + path_width and X < starting_x + square_side and Y >= starting_y + path_len and Y < starting_y + square_side)):
+        h = 0.0
+    elif (X > starting_x + path_width and X < starting_x + path_len and Y > starting_y + path_width and Y < starting_y + path_len) or \
+        (X < starting_x or X > starting_x + square_side or Y < starting_y or Y > starting_y + square_side):
+        h = 5.0
+    else:
         h = pnoise2(
         x / num_edges[0] * C1 * size[0] * density,
         y / num_edges[1] * C1 * size[1] * density,
         OCTAVE)
-    elif (X > -0.05 and X < 0.15 and Y < 0.10 and Y > -0.00) or \
-        (X < -0.03 or X > 0.23 or Y < -0.08 or Y > 0.18):
-        h = 5.0
-    else:
-        h = 0.0
     
     return h

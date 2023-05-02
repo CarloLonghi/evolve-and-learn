@@ -9,6 +9,7 @@ import mujoco
 import mujoco_viewer
 import numpy as np
 import numpy.typing as npt
+from learning_algorithms.EVO.CPG.vision import OpenGLVision
 
 try:
     import logging
@@ -90,10 +91,15 @@ class LocalRunner(Runner):
     ) -> EnvironmentResults:
         logging.info(f"Environment {env_index}")
 
+        targets_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        target_counter = 0
+
         model = cls._make_model(env_descr)
 
         # TODO initial dof state
         data = mujoco.MjData(model)
+
+        vision_obj = OpenGLVision(model, (640, 480), headless)
 
         initial_targets = [
             dof_state
@@ -136,6 +142,7 @@ class LocalRunner(Runner):
         results.environment_states.append(
             EnvironmentState(0.0, cls._get_actor_states(env_descr, data, model))
         )
+        current_pos = results.environment_states[-1].actor_states[0].position
         save_pos = True
         while (time := data.time) < simulation_time:
             # do control if it is time
@@ -143,7 +150,8 @@ class LocalRunner(Runner):
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos, save_pos)
+                current_vision = vision_obj.process(model, data)
+                env_descr.controller.control(control_step, control_user, current_vision, data.xanchor, current_pos, save_pos)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
@@ -192,6 +200,10 @@ class LocalRunner(Runner):
                 img = np.stack((img[:,:,2],img[:,:,1],img[:,:,0]), axis=-1) # switch color channels
                 video.write(img)
 
+            reached_target = cls.update_targets_color(model, current_pos, targets_points, target_counter)
+            if reached_target:
+                target_counter += 1
+
         if not headless or record_settings is not None:
             viewer.close()
 
@@ -204,6 +216,22 @@ class LocalRunner(Runner):
         )
 
         return results
+
+    @staticmethod
+    def update_targets_color(model: mujoco.MjModel, robot_pos, targets: List[float], target_counter: int) -> bool:
+        transparent = np.array([0.9, 0.9, 0.9, .0])
+        green = np.array([0.0, 0.9, 0.5, 1.0])
+
+        reached_target = False
+        
+        if target_counter < 4:
+            next_target = targets[target_counter]
+            dist = math.sqrt((robot_pos[0] - next_target[0])**2 + (robot_pos[1] - next_target[1])**2)
+            if dist <= 0.1:
+                model.geom_rgba[1  + target_counter] = transparent
+                model.geom_rgba[1  + target_counter + 1] = green
+                reached_target = True
+        return reached_target
 
     async def run_batch(
         self, batch: Batch, record_settings: Optional[RecordSettings] = None
@@ -256,6 +284,8 @@ class LocalRunner(Runner):
         env_mjcf.option.integrator = "RK4"
 
         env_mjcf.option.gravity = [0, 0, -9.81]
+
+        env_mjcf.size.nconmax = 150
 
         env_mjcf.worldbody.add(
             "light",
@@ -318,21 +348,35 @@ class LocalRunner(Runner):
                 heightmaps.append(geo)
             else:
                 raise NotImplementedError()
-            
+
         # add target points markers
-        target_points = [(1.0, -1.0), (0.0, -2.0)]
-        for i, point in enumerate(target_points):
+        target_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        i = 0
+        env_mjcf.worldbody.add(
+            "geom",
+            name="target_point_"+str(i),
+            pos=[target_points[0][0], target_points[0][1], 0.005],
+            size=[0.1, 0.05],
+            type="cylinder",
+            condim=1,
+            contype=2,
+            conaffinity=2,
+            rgba="0. .9 .5 1.",
+        )
+        i += 1
+        for point in target_points[1:]:
            env_mjcf.worldbody.add(
                "geom",
                name="target_point_"+str(i),
                pos=[point[0], point[1], 0.005],
-               size=[0.1, 0.01],
+               size=[0.1, 0.05],
                type="cylinder",
                condim=1,
                contype=2,
                conaffinity=2,
-               rgba="0. .9 .5 1.",
+               rgba=".9 .9 .9 0.",
            )
+           i+= 1
         env_mjcf.visual.headlight.active = 0
 
         for actor_index, posed_actor in enumerate(env_descr.actors):
@@ -378,6 +422,20 @@ class LocalRunner(Runner):
                         os.remove(botfile.name)
 
             LocalRunner._set_parameters(robot)
+
+            aabb = posed_actor.actor.calc_aabb()
+            fps_cam_pos = [
+                aabb.offset.x - 0.045,
+                aabb.offset.y,
+                aabb.offset.z + 0.07
+            ]
+            robot.worldbody.add("camera", name="vision", mode="fixed", dclass=robot.full_identifier,
+                                pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=102)
+            # robot.worldbody.add('site',
+            #                     name=robot.full_identifier[:-1] + "_camera",
+            #                     pos=fps_cam_pos, rgba=[0, 0, 1, 1],
+            #                     type="ellipsoid", size=[0.0001, 0.025, 0.025],
+            #                     xyaxes="0 -1 0 0 0 1")
 
             for joint in posed_actor.actor.joints:
                 robot.actuator.add(

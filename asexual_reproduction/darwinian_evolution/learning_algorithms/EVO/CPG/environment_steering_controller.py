@@ -4,16 +4,16 @@ from revolve2.actor_controller import ActorController
 from revolve2.core.physics.running import ActorControl, EnvironmentController
 import numpy as np
 from typing import List, Tuple
+import numpy.typing as npt
+from matplotlib import pyplot as plt
 
 
 class EnvironmentActorController(EnvironmentController):
     """An environment controller for an environment with a single actor that uses a provided ActorController."""
 
     actor_controller: ActorController
-    target_points: List[Tuple[float]]
-    reached_target_counter: int
-    target_range: float
     n: int
+    x_pos: float
 
     def __init__(self, actor_controller: ActorController,
                 target_points: List[Tuple[float]] = [(0.0,0.0)],
@@ -28,14 +28,12 @@ class EnvironmentActorController(EnvironmentController):
         self.actor_controller = actor_controller
         self.steer = steer
         if steer:
-            self.target_points = target_points
-            self.reached_target_counter = 0
-            self.target_range = 0.1
             self.n = 7
             self.is_left = []
             self.is_right = []
+            self.x_pos = 320
 
-    def control(self, dt: float, actor_control: ActorControl, joint_positions=None, current_pos=None, save_pos=False) -> None:
+    def control(self, dt: float, actor_control: ActorControl, vision_img: npt.ArrayLike, joint_positions=None, current_pos=None, save_pos=False) -> None:
         """
         Control the single actor in the environment using an ActorController.
 
@@ -44,44 +42,42 @@ class EnvironmentActorController(EnvironmentController):
         :param coordinates: current coordinates of each joint
         :param current_pos: current position of the agent
         """
-        
+        vision_img = np.flip(vision_img) # flip the image because its axis are inverted
+
+        # we use color filters to find the next target point 
+        green_filter = vision_img[:,:,1] > 100
+        red_filter = vision_img[:,:,0] < 100
+        blu_filter = vision_img[:,:,2] < 100
+        coords = np.where(green_filter & red_filter & blu_filter)
+        if coords[1].shape[0] > 0:
+            self.x_pos = np.mean(coords[1])
+
         self.actor_controller.step(dt)
         targets = self.actor_controller.get_dof_targets()
 
         if self.steer:
 
-            # check if the robot reached the target
-            if self.reached_target_counter < len(self.target_points):
-                core_position = current_pos[:2]
-                if (abs(core_position[0]-self.target_points[self.reached_target_counter][0]) < self.target_range and
-                    abs(core_position[1]-self.target_points[self.reached_target_counter][1]) < self.target_range):
-                    self.reached_target_counter += 1
+            core_position = current_pos[:2]
 
-            if self.reached_target_counter < len(self.target_points):
+            if save_pos:
+                for joint_pos in joint_positions[1:]:
+                    self.is_left.append(joint_pos[0] > 0.5)
+                    self.is_right.append(joint_pos[0] < 0.5)
 
-                if save_pos:
-                    for joint_pos in joint_positions[1:]:
-                        self.is_left.append(joint_pos[0] > 0)
-                        self.is_right.append(joint_pos[0] < 0)
+            # check if joints are on the left or right
+            joint_positions = [c[:2] for c in joint_positions]
 
-                # check if joints are on the left or right
-                joint_positions = [c[:2] for c in joint_positions]
+            # compute steering angle and parameters
+            theta = (640 - self.x_pos) - 320
+            g = ((320-abs(theta))/320) ** self.n
 
-                # compute steering angle and parameters
-                trajectory = [(0.0, 0.0)] + self.target_points
-                a0 = np.array(core_position) - trajectory[self.reached_target_counter]
-                b0 = np.array(self.target_points[self.reached_target_counter]) - trajectory[self.reached_target_counter]
-                theta = np.arctan2(a0[1], a0[0]) - np.arctan2(b0[1], b0[0])
-                theta = (theta + np.pi) % (2*np.pi) - np.pi
-                g = ((np.pi-abs(theta))/np.pi) ** self.n
-
-                # apply steering factor
-                for i, (left, right) in enumerate(zip(self.is_left, self.is_right)):
-                    if left:
-                        if theta < 0:
-                            targets[i] *= g
-                    elif right:
-                        if theta >= 0:
-                            targets[i] *= g
+            # apply steering factor
+            for i, (left, right) in enumerate(zip(self.is_left, self.is_right)):
+                if left:
+                    if theta < 0:
+                        targets[i] *= g
+                elif right:
+                    if theta >= 0:
+                        targets[i] *= g
             
         actor_control.set_dof_targets(0, targets)

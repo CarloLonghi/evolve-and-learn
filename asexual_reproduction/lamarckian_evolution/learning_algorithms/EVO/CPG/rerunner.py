@@ -35,12 +35,12 @@ class ModularRobotRerunner:
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment(EnvironmentActorController(self._controller, [(1.0, -1.0), (0.0, -2.0)], steer=True))
+        env = Environment(EnvironmentActorController(self._controller, [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)], steer=True))
         bounding_box = actor.calc_aabb()
         env.actors.append(
             PosedActor(
                 actor,
-                Vector3([0.0, 0.0, bounding_box.size.z / 2.0 - bounding_box.offset.z]),
+                Vector3([0.5, 0.0, bounding_box.size.z / 2.0 - bounding_box.offset.z]),
                 Quaternion(),
                 [0.0 for _ in self._controller.get_dof_targets()],
             )

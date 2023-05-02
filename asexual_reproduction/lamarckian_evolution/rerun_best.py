@@ -23,11 +23,12 @@ from revolve2.actor_controllers.cpg import CpgNetworkStructure, Cpg
 from revolve2.standard_resources import terrains
 from typing import Optional
 import argparse
+from learning_algorithms.EVO.CPG.terrain import rugged_track as track_terrain
 
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
     """Run the script."""
-    db = open_async_database_sqlite('lamarc_asex_database/')
+    db = open_async_database_sqlite('newenv_data/lamarckian/run2/')
     async with AsyncSession(db) as session:
         individuals = (
             (
@@ -114,7 +115,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5, terrains.flat(), record_dir, record)
+    await rerunner.rerun(bot, 5, track_terrain(), record_dir, record)
 
 def relative_pos(pos1, pos2):
     dx = pos2[0] - pos1[0]
