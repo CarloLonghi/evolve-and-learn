@@ -28,7 +28,7 @@ class ModularRobotRerunner:
         :param control_frequency: Control frequency for the simulation. See `Batch` class from physics running.
         """
         batch = Batch(
-            simulation_time=60,
+            simulation_time=90,
             sampling_frequency=5,
             control_frequency=control_frequency,
         )
@@ -52,10 +52,7 @@ class ModularRobotRerunner:
         rs = None
         if record:
             rs = RecordSettings(record_dir)
-        res = await runner.run_batch(batch, rs)
-        traj_x = [env_state.actor_states[0].position[0] for env_state in res.environment_results[0].environment_states]
-        traj_y = [env_state.actor_states[0].position[1] for env_state in res.environment_results[0].environment_states]
-        return traj_x, traj_y
+        await runner.run_batch(batch, rs)
 
 
 

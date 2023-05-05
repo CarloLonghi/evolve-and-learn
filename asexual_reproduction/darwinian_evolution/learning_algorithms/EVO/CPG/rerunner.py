@@ -26,19 +26,19 @@ class ModularRobotRerunner:
         :param control_frequency: Control frequency for the simulation. See `Batch` class from physics running.
         """
         batch = Batch(
-            simulation_time=60,
+            simulation_time=90,
             sampling_frequency=5,
             control_frequency=control_frequency,
         )
 
         actor, self._controller = robot.make_actor_and_controller()
 
-        env = Environment(EnvironmentActorController(self._controller, [(1.0, -1.0), (0.0, -2.0)], steer=True))
+        env = Environment(EnvironmentActorController(self._controller, [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)], steer=True))
         bounding_box = actor.calc_aabb()
         env.actors.append(
             PosedActor(
                 actor,
-                Vector3([0.0, 0.0, bounding_box.size.z / 2.0 - bounding_box.offset.z]),
+                Vector3([0.5, 0.0, bounding_box.size.z / 2.0 - bounding_box.offset.z]),
                 Quaternion(),
                 [0.0 for _ in self._controller.get_dof_targets()],
             )
@@ -46,11 +46,10 @@ class ModularRobotRerunner:
         env.static_geometries.extend(terrain.static_geometry)
         batch.environments.append(env)
 
-        runner = LocalRunner(headless=False)
+        runner = LocalRunner(headless=True)
         rs = None
         if record:
             rs = RecordSettings(record_dir)
-        await runner.run_batch(batch, rs)
 
 
 
