@@ -9,6 +9,7 @@ import mujoco
 import mujoco_viewer
 import numpy as np
 import numpy.typing as npt
+from learning_algorithms.EVO.CPG.vision import OpenGLVision
 
 try:
     import logging
@@ -98,6 +99,8 @@ class LocalRunner(Runner):
         # TODO initial dof state
         data = mujoco.MjData(model)
 
+        vision_obj = OpenGLVision(model, (640, 480), headless)
+
         initial_targets = [
             dof_state
             for posed_actor in env_descr.actors
@@ -147,7 +150,8 @@ class LocalRunner(Runner):
                 last_control_time = math.floor(time / control_step) * control_step
                 control_user = ActorControl()
                 current_pos = results.environment_states[-1].actor_states[0].position
-                env_descr.controller.control(control_step, control_user, data.xanchor, current_pos, save_pos)
+                current_vision = vision_obj.process(model, data)
+                env_descr.controller.control(control_step, control_user, current_vision, data.xanchor, current_pos, save_pos)
                 actor_targets = control_user._dof_targets
                 actor_targets.sort(key=lambda t: t[0])
                 targets = [
@@ -280,6 +284,8 @@ class LocalRunner(Runner):
         env_mjcf.option.integrator = "RK4"
 
         env_mjcf.option.gravity = [0, 0, -9.81]
+
+        env_mjcf.size.nconmax = 150
 
         env_mjcf.worldbody.add(
             "light",
@@ -425,11 +431,11 @@ class LocalRunner(Runner):
             ]
             robot.worldbody.add("camera", name="vision", mode="fixed", dclass=robot.full_identifier,
                                 pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=102)
-            robot.worldbody.add('site',
-                                name=robot.full_identifier[:-1] + "_camera",
-                                pos=fps_cam_pos, rgba=[0, 0, 1, 1],
-                                type="ellipsoid", size=[0.0001, 0.025, 0.025],
-                                xyaxes="0 -1 0 0 0 1")
+            # robot.worldbody.add('site',
+            #                     name=robot.full_identifier[:-1] + "_camera",
+            #                     pos=fps_cam_pos, rgba=[0, 0, 1, 1],
+            #                     type="ellipsoid", size=[0.0001, 0.025, 0.025],
+            #                     xyaxes="0 -1 0 0 0 1")
 
             for joint in posed_actor.actor.joints:
                 robot.actuator.add(
@@ -479,6 +485,7 @@ class LocalRunner(Runner):
             offset += len(heightmap.heights) * len(heightmap.heights[0])
         
         return model
+    
     @classmethod
     def _get_actor_states(
         cls, env_descr: Environment, data: mujoco.MjData, model: mujoco.MjModel
