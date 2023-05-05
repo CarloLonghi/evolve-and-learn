@@ -50,6 +50,7 @@ class ModularRobotRerunner:
         rs = None
         if record:
             rs = RecordSettings(record_dir)
+        await runner.run_batch(batch, rs)
 
 
 
