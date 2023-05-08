@@ -472,6 +472,12 @@ class LocalRunner(Runner):
 
         if element.tag == "geom":
             element.friction = [0.7, 0.1, 0.1]
+            if math.isclose(element.size[0], 0.044, abs_tol=0.001):
+                element.rgba = [1., 1., 0., 1.]
+            elif math.isclose(element.size[0], 0.031, abs_tol=0.001):
+                element.rgba = [.1, 0., 1., 1.]
+            else:
+                element.rgba = [0., 1., 0., 1.]
 
     @staticmethod
     def _set_parameters(robot):
