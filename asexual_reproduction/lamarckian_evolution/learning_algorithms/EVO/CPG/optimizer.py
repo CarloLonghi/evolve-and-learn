@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from array_genotype.array_genotype import ArrayGenotype
 from array_genotype.array_genotype_mutation import mutate as brain_mutation
 from revolve2.standard_resources import terrains
-from learning_algorithms.EVO.CPG.terrain import rugged_track
+import learning_algorithms.EVO.CPG.terrain as terrains
 
 class Optimizer(RevDEOptimizer):
     """
@@ -31,7 +31,7 @@ class Optimizer(RevDEOptimizer):
     Uses the generic EA optimizer as a base.
     """
 
-    _TERRAIN = rugged_track()
+    _TERRAIN = terrains.mixed_track()
 
     _body: Body
     _actor: Actor
