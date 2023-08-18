@@ -1,11 +1,54 @@
 from typing import Tuple
 from revolve2.core.physics import Terrain
-from revolve2.standard_resources.terrains import rugged_heightmap
+from revolve2.standard_resources.terrains import rugged_heightmap, flat
 from revolve2.core.physics.running import geometry
 from pyrr import Quaternion, Vector3
 import numpy as np
 import numpy.typing as npt
 from noise import pnoise2
+
+
+def flat_plane(size: Vector3 = Vector3([20.0, 20.0, 0.0])) -> Terrain:
+    return flat(size)
+
+def rugged_plane(
+    size: Tuple[float, float],
+    ruggedness: float,
+    granularity_multiplier: float = 1.0,
+) -> Terrain:
+    
+    NUM_EDGES = 100  # arbitrary constant to get a nice number of edges
+
+    num_edges = (
+        int(NUM_EDGES * size[0] * granularity_multiplier),
+        int(NUM_EDGES * size[1] * granularity_multiplier),
+    )
+
+    rugged = rugged_heightmap(
+        size=size,
+        num_edges=num_edges,
+        density=1.5,
+    )
+
+    max_height = ruggedness
+    if max_height == 0.0:
+        heightmap = np.zeros(num_edges)
+        max_height = 1.0
+    else:
+        heightmap = rugged
+
+    return Terrain(
+        static_geometry=[
+            geometry.Heightmap(
+                position=Vector3(),
+                orientation=Quaternion(),
+                size=Vector3([size[0], size[1], max_height]),
+                base_thickness=0.1 + ruggedness,
+                heights=heightmap,
+            )
+        ]
+    )
+
 
 def mixed_track(
 ) -> Terrain:
@@ -20,7 +63,7 @@ def mixed_track(
         int(NUM_EDGES * size[1] * granularity_multiplier),
     )
 
-    rugged = mixed_heightmap(
+    rugged = mixed_track_heightmap(
         size=size,
         num_edges=num_edges,
         density=1.5,
@@ -44,7 +87,7 @@ def mixed_track(
         ]
     )
 
-def mixed_heightmap(
+def mixed_track_heightmap(
     size: Tuple[float, float],
     num_edges: Tuple[int, int],
     density: float = 1.0,
@@ -55,14 +98,14 @@ def mixed_heightmap(
 
     return np.fromfunction(
         np.vectorize(
-            lambda y, x: mixed_map(y,x, size, num_edges, density),
+            lambda y, x: mixed_track_map(y,x, size, num_edges, density),
             otypes=[float],
         ),
         num_edges,
         dtype=float,
     )
 
-def mixed_map(y, x, size, num_edges, density):
+def mixed_track_map(y, x, size, num_edges, density):
 
     OCTAVE = 10
     C1 = 4.0  # arbitrary constant to get nice noise
@@ -106,7 +149,7 @@ def plane_track(
         int(NUM_EDGES * size[1] * granularity_multiplier),
     )
 
-    rugged = plane_heightmap(
+    rugged = plane_track_heightmap(
         size=size,
         num_edges=num_edges,
         density=1.5,
@@ -130,7 +173,7 @@ def plane_track(
         ]
     )
 
-def plane_heightmap(
+def plane_track_heightmap(
     size: Tuple[float, float],
     num_edges: Tuple[int, int],
     density: float = 1.0,
@@ -141,14 +184,14 @@ def plane_heightmap(
 
     return np.fromfunction(
         np.vectorize(
-            lambda y, x: plane_map(y,x, size, num_edges, density),
+            lambda y, x: plane_track_map(y,x, size, num_edges, density),
             otypes=[float],
         ),
         num_edges,
         dtype=float,
     )
 
-def plane_map(y, x, size, num_edges, density):
+def plane_track_map(y, x, size, num_edges, density):
 
     OCTAVE = 10
     C1 = 4.0  # arbitrary constant to get nice noise
@@ -186,7 +229,7 @@ def rugged_track(
         int(NUM_EDGES * size[1] * granularity_multiplier),
     )
 
-    rugged = rugged_heightmap(
+    rugged = rugged_track_heightmap(
         size=size,
         num_edges=num_edges,
         density=1.5,
@@ -210,7 +253,7 @@ def rugged_track(
         ]
     )
 
-def rugged_heightmap(
+def rugged_track_heightmap(
     size: Tuple[float, float],
     num_edges: Tuple[int, int],
     density: float = 1.0,
@@ -221,14 +264,14 @@ def rugged_heightmap(
 
     return np.fromfunction(
         np.vectorize(
-            lambda y, x: rugged_map(y,x, size, num_edges, density),
+            lambda y, x: rugged_track_map(y,x, size, num_edges, density),
             otypes=[float],
         ),
         num_edges,
         dtype=float,
     )
 
-def rugged_map(y, x, size, num_edges, density):
+def rugged_track_map(y, x, size, num_edges, density):
 
     OCTAVE = 10
     C1 = 4.0  # arbitrary constant to get nice noise
