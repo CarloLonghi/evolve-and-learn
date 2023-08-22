@@ -61,8 +61,8 @@ class EnvironmentActorController(EnvironmentController):
 
             if save_pos:
                 for joint_pos in joint_positions[1:]:
-                    self.is_left.append(joint_pos[0] > 0.5)
-                    self.is_right.append(joint_pos[0] < 0.5)
+                    self.is_left.append(joint_pos[0] > 0.)
+                    self.is_right.append(joint_pos[0] <= 0.)
 
             # check if joints are on the left or right
             joint_positions = [c[:2] for c in joint_positions]

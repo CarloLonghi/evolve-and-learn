@@ -27,6 +27,7 @@ from revolve2.core.physics.running import (
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from learning_algorithms.EVO.CPG.optimize import main as learn_controller
+from rerun_robot import main as rerun_robot
 from revolve2.runners.mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -254,17 +255,74 @@ class Optimizer(EAOptimizer[Genotype, float]):
     async def _evaluate_generation(
         self,
         genotypes: List[Genotype],
+        old_genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId,
     ) -> Tuple[List[float], List[Genotype]]:
 
         final_fitnesses = []
         starting_fitnesses = []
+        old_fitnesses = []
 
         new_genotypes = []
 
         body_genotypes = [genotype.body for genotype in genotypes]
         brain_genotypes = [genotype.brain for genotype in genotypes]
+
+        targets = generate_targets(num_targets=2, rng=self._rng, between_dist=0.8)
+        print(f'new point targets: {targets}')
+
+        # the old genotypes are re-evaluated on the new targets without learning
+
+        if old_genotypes is not None:
+            old_body_genotypes = [genotype.body for genotype in old_genotypes]
+            old_brain_genotypes = [genotype.brain for genotype in old_genotypes]
+
+            for body_num, (body_genotype, brain_genotype) in enumerate(zip(old_body_genotypes, old_brain_genotypes)):
+                body = body_develop(body_genotype)
+                _, dof_ids = body.to_actor()
+                active_hinges_unsorted = body.find_active_hinges()
+                active_hinge_map = {
+                    active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+                }
+                active_hinges = [active_hinge_map[id] for id in dof_ids]
+                cpg_network_structure = make_cpg_network_structure_neighbour(
+                    active_hinges
+                )
+                brain_params = []
+                for hinge in active_hinges:
+                    pos = body.grid_position(hinge)
+                    cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
+                    brain_params.append(brain_genotype.params_array[
+                        cpg_idx*14
+                    ])
+
+                for connection in cpg_network_structure.connections:
+                    hinge1 = connection.cpg_index_highest.index
+                    pos1 = body.grid_position(active_hinges[hinge1])
+                    cpg_idx1 = int(pos1[0] + pos1[1] * self._grid_size + self._grid_size**2 / 2)
+                    hinge2 = connection.cpg_index_lowest.index
+                    pos2 = body.grid_position(active_hinges[hinge2])
+                    cpg_idx2 = int(pos2[0] + pos2[1] * self._grid_size + self._grid_size**2 / 2)
+                    rel_pos = relative_pos(pos1[:2], pos2[:2])
+                    idx = max(cpg_idx1, cpg_idx2)
+                    brain_params.append(brain_genotype.params_array[
+                        idx*14 + rel_pos
+                    ])
+
+                logging.info("Starting the re-evaluation of the robot num: " + str(body_num))
+
+                new_fitness = 0.0
+                # check that the morphology has at least one active hinge. Otherwise the maximum fitness is 0
+                if len(body.find_active_hinges()) <= 0:
+                    logging.info("Old robot num " + str(body_num) + " has no active hinges")
+                else:
+                    new_fitness = await rerun_robot(body, brain_params, targets)
+
+                old_fitnesses.append(new_fitness)
+
+
+        # the new genotypes go through the learning phase before being evaluated
 
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
@@ -306,7 +364,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             if len(body.find_active_hinges()) <= 0:
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
-                learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self.generation_index, body_num)
+                learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, targets)
                 for hinge, learned_weight in zip(active_hinges, learned_params[:len(active_hinges)]):
                     pos = body.grid_position(hinge)
                     cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
@@ -334,7 +392,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
-        return (starting_fitnesses, final_fitnesses), new_genotypes
+        return (starting_fitnesses, final_fitnesses), new_genotypes, old_fitnesses
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
@@ -388,7 +446,7 @@ class DbOptimizerState(DbBase):
     control_frequency = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
     num_generations = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
-def relative_pos(pos1, pos2):
+def relative_pos(pos1, pos2) -> int:
     dx = pos2[0] - pos1[0]
     dy = pos2[1] - pos1[1]
 
@@ -396,3 +454,17 @@ def relative_pos(pos1, pos2):
                 (-1,1):7, (1,-1):8, (2,0):9, (0,2):10, (-2,0):11, (0,-2):12, (0,0):13}
     
     return mapping[(dx,dy)]
+
+def generate_targets(num_targets: int, rng: Random, starting_point: Tuple[int] = (0,0), between_dist: float = 1.) -> List[Tuple[int]]:
+
+    targets = []
+
+    x, y = starting_point
+    for _ in range(num_targets):
+        dx = (rng.random() * (2 * between_dist)) - (1 * between_dist)
+        x = x + dx
+        dy = math.sqrt((between_dist ** 2) - (dx ** 2))
+        y = y - dy
+        targets.append((x, y))
+
+    return targets

@@ -51,12 +51,14 @@ class LocalRunner(Runner):
     _headless: bool
     _start_paused: bool
     _num_simulators: int
+    _target_points: List
 
     def __init__(
         self,
         headless: bool = False,
         start_paused: bool = False,
         num_simulators: int = 1,
+        target_points: List = [0., 0.],
     ):
         """
         Initialize this object.
@@ -76,6 +78,7 @@ class LocalRunner(Runner):
         self._headless = headless
         self._start_paused = start_paused
         self._num_simulators = num_simulators
+        self._target_points = target_points
 
     @classmethod
     def _run_environment(
@@ -88,13 +91,14 @@ class LocalRunner(Runner):
         control_step: float,
         sample_step: float,
         simulation_time: int,
+        target_points: List
     ) -> EnvironmentResults:
         logging.info(f"Environment {env_index}")
 
-        targets_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        targets_points = target_points
         target_counter = 0
 
-        model = cls._make_model(env_descr)
+        model = cls._make_model(env_descr, targets_points)
 
         # TODO initial dof state
         data = mujoco.MjData(model)
@@ -224,7 +228,7 @@ class LocalRunner(Runner):
 
         reached_target = False
         
-        if target_counter < 4:
+        if target_counter < len(targets):
             next_target = targets[target_counter]
             dist = math.sqrt((robot_pos[0] - next_target[0])**2 + (robot_pos[1] - next_target[1])**2)
             if dist <= 0.1:
@@ -265,6 +269,7 @@ class LocalRunner(Runner):
                     control_step,
                     sample_step,
                     batch.simulation_time,
+                    self._target_points
                 )
                 for env_index, env_descr in enumerate(batch.environments)
             ]
@@ -275,7 +280,7 @@ class LocalRunner(Runner):
         return results
 
     @staticmethod
-    def _make_model(env_descr: Environment) -> mujoco.MjModel:
+    def _make_model(env_descr: Environment, target_points: List) -> mujoco.MjModel:
         env_mjcf = mjcf.RootElement(model="environment")
 
         env_mjcf.compiler.angle = "radian"
@@ -350,13 +355,13 @@ class LocalRunner(Runner):
                 raise NotImplementedError()
 
         # add target points markers
-        target_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        target_points = target_points
         i = 0
         env_mjcf.worldbody.add(
             "geom",
             name="target_point_"+str(i),
             pos=[target_points[0][0], target_points[0][1], 0.005],
-            size=[0.1, 0.05],
+            size=[0.1, 0.000001],
             type="cylinder",
             condim=1,
             contype=2,
@@ -369,7 +374,7 @@ class LocalRunner(Runner):
                "geom",
                name="target_point_"+str(i),
                pos=[point[0], point[1], 0.005],
-               size=[0.1, 0.05],
+               size=[0.1, 0.000001],
                type="cylinder",
                condim=1,
                contype=2,
