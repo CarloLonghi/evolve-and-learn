@@ -21,9 +21,8 @@ from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import develop_v1
 from revolve2.genotypes.cppnwin._genotype import GenotypeSerializer as BodySerializer
 from revolve2.actor_controllers.cpg import CpgNetworkStructure, Cpg
 import learning_algorithms.EVO.CPG.terrain as terrains
-from typing import Optional, Tuple, List
+from typing import Optional
 import argparse
-from random import Random
 
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
@@ -114,11 +113,8 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
 
         bot = ModularRobot(body, brain)
 
-    targets = generate_targets(num_targets=2, rng=Random(), between_dist=0.8)
-    print(f"Targets: {targets}")
-
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5, terrains.flat_plane(), targets, False, record_dir, record)
+    await rerunner.rerun(bot, 5, terrains.flat_plane(), record_dir, record)
 
 def relative_pos(pos1, pos2):
     dx = pos2[0] - pos1[0]
@@ -128,20 +124,6 @@ def relative_pos(pos1, pos2):
                 (-1,1):7, (1,-1):8, (2,0):9, (0,2):10, (-2,0):11, (0,-2):12, (0,0):13}
     
     return mapping[(dx,dy)]
-
-def generate_targets(num_targets: int, rng: Random, starting_point: Tuple[int] = (0,0), between_dist: float = 1.) -> List[Tuple[int]]:
-
-    targets = []
-
-    x, y = starting_point
-    for _ in range(num_targets):
-        dx = (rng.random() * (2 * between_dist)) - (1 * between_dist)
-        x = x + dx
-        dy = math.sqrt((between_dist ** 2) - (dx ** 2))
-        y = y - dy
-        targets.append((x, y))
-
-    return targets
 
 if __name__ == "__main__":
     import asyncio

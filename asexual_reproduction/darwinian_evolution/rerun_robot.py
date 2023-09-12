@@ -49,5 +49,5 @@ async def main(body, brain_params, targets) -> float:
     bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    fitness = await rerunner.rerun(bot, 5, terrains.flat_plane(), targets, True, None, False)
+    fitness = await rerunner.rerun(bot, 5, terrains.flat_plane(), targets, None, False)
     return fitness

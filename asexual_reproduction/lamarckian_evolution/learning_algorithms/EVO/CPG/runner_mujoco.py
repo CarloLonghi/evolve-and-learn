@@ -10,7 +10,6 @@ import mujoco_viewer
 import numpy as np
 import numpy.typing as npt
 from learning_algorithms.EVO.CPG.vision import OpenGLVision
-import glfw
 
 try:
     import logging
@@ -104,7 +103,7 @@ class LocalRunner(Runner):
         # TODO initial dof state
         data = mujoco.MjData(model)
 
-        vision_obj = OpenGLVision(model, (640, 480))
+        vision_obj = OpenGLVision(model, (640, 480), headless)
 
         initial_targets = [
             dof_state
@@ -117,9 +116,6 @@ class LocalRunner(Runner):
             posed_actor.dof_states
 
         if not headless or record_settings is not None:
-            # delegate rendering to the egl back-end
-            glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API)
-
             viewer = mujoco_viewer.MujocoViewer(
                 model,
                 data,
@@ -237,8 +233,7 @@ class LocalRunner(Runner):
             dist = math.sqrt((robot_pos[0] - next_target[0])**2 + (robot_pos[1] - next_target[1])**2)
             if dist <= 0.1:
                 model.geom_rgba[1  + target_counter] = transparent
-                if target_counter < len(targets) - 1:
-                    model.geom_rgba[1  + target_counter + 1] = green
+                model.geom_rgba[1  + target_counter + 1] = green
                 reached_target = True
         return reached_target
 
@@ -311,8 +306,8 @@ class LocalRunner(Runner):
             builtin="checker",
             width="512",
             height="512",
-            rgb1=".2 .2 .2",
-            rgb2=".3 .3 .3",
+            rgb1=".1 .2 .3",
+            rgb2=".2 .3 .4",
         )
         env_mjcf.asset.add(
             "material",
@@ -330,8 +325,7 @@ class LocalRunner(Runner):
                     type="plane",
                     pos=[geo.position.x, geo.position.y, geo.position.z],
                     size=[geo.size.x / 2.0, geo.size.y / 2.0, 1.0],
-                    rgba=[1., 1., 1., 1.0],
-                    material='grid'
+                    rgba=[geo.color.x, geo.color.y, geo.color.z, 1.0],
                 )
             elif isinstance(geo, geometry.Heightmap):
                 env_mjcf.asset.add(
@@ -442,11 +436,11 @@ class LocalRunner(Runner):
             ]
             robot.worldbody.add("camera", name="vision", mode="fixed", dclass=robot.full_identifier,
                                 pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=102)
-            robot.worldbody.add('site',
-                                name=robot.full_identifier[:-1] + "_camera",
-                                pos=fps_cam_pos, rgba=[0, 0, 1, 1],
-                                type="ellipsoid", size=[0.0001, 0.025, 0.025],
-                                xyaxes="0 -1 0 0 0 1")
+            # robot.worldbody.add('site',
+            #                     name=robot.full_identifier[:-1] + "_camera",
+            #                     pos=fps_cam_pos, rgba=[0, 0, 1, 1],
+            #                     type="ellipsoid", size=[0.0001, 0.025, 0.025],
+            #                     xyaxes="0 -1 0 0 0 1")
 
             for joint in posed_actor.actor.joints:
                 robot.actuator.add(
@@ -540,12 +534,6 @@ class LocalRunner(Runner):
 
         if element.tag == "geom":
             element.friction = [0.7, 0.1, 0.1]
-            if math.isclose(element.size[0], 0.044, abs_tol=0.001):
-                element.rgba = [1., 1., 0., 1.]
-            elif math.isclose(element.size[0], 0.031, abs_tol=0.001):
-                element.rgba = [.1, 0., 1., 1.]
-            else:
-                element.rgba = [0., 1., 0., 1.]
 
     @staticmethod
     def _set_parameters(robot):

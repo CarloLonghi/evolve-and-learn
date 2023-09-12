@@ -20,7 +20,6 @@ class ModularRobotRerunner:
                     control_frequency: float, 
                     terrain: Terrain,
                     targets: List[Tuple[int]],
-                    headless: bool,
                     record_dir: Optional[str], 
                     record: bool = False) -> None:
         """
@@ -30,7 +29,7 @@ class ModularRobotRerunner:
         :param control_frequency: Control frequency for the simulation. See `Batch` class from physics running.
         """
         batch = Batch(
-            simulation_time=60,
+            simulation_time=90,
             sampling_frequency=5,
             control_frequency=control_frequency,
         )
@@ -50,7 +49,7 @@ class ModularRobotRerunner:
         env.static_geometries.extend(terrain.static_geometry)
         batch.environments.append(env)
 
-        runner = LocalRunner(headless=headless, target_points=targets)
+        runner = LocalRunner(headless=True, target_points=targets)
         rs = None
         if record:
             rs = RecordSettings(record_dir)
