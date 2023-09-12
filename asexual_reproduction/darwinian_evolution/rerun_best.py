@@ -25,7 +25,7 @@ import argparse
 async def main(record_dir: Optional[str], record: bool = False) -> None:
 
     """Run the script."""
-    db = open_async_database_sqlite('newenv_data/darwinian/run2/')
+    db = open_async_database_sqlite('darw_asex_database')
     async with AsyncSession(db) as session:
         individuals = (
             (
@@ -112,7 +112,7 @@ async def main(record_dir: Optional[str], record: bool = False) -> None:
         bot = ModularRobot(body, brain)
 
     rerunner = ModularRobotRerunner()
-    await rerunner.rerun(bot, 5, terrains.mixed_track(), record_dir, record)
+    await rerunner.rerun(bot, 5, terrains.flat_plane(), record_dir, record)
 
 def relative_pos(pos1, pos2):
     dx = pos2[0] - pos1[0]

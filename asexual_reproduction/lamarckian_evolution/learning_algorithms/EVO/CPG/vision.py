@@ -12,9 +12,9 @@ class OpenGLVision:
     max_width, max_height = 20000000, 20000000
     global_context = None
 
-    def __init__(self, model: mujoco.MjModel, shape: Tuple[int, int], headless: bool):
+    def __init__(self, model: mujoco.MjModel, shape: Tuple[int, int]):
         # if OpenGLVision.global_context is None:
-        if OpenGLVision.global_context is None and headless:
+        if OpenGLVision.global_context is None:
             config = Config.opengl_lib.upper()
             if config == "GLFW":  # Does not work in multithread
                 from mujoco.glfw import GLContext

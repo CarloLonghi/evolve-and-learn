@@ -10,6 +10,7 @@ import mujoco_viewer
 import numpy as np
 import numpy.typing as npt
 from learning_algorithms.EVO.CPG.vision import OpenGLVision
+import glfw
 
 try:
     import logging
@@ -51,12 +52,14 @@ class LocalRunner(Runner):
     _headless: bool
     _start_paused: bool
     _num_simulators: int
+    _target_points: List
 
     def __init__(
         self,
         headless: bool = False,
         start_paused: bool = False,
         num_simulators: int = 1,
+        target_points: List = [0., 0.],
     ):
         """
         Initialize this object.
@@ -76,6 +79,7 @@ class LocalRunner(Runner):
         self._headless = headless
         self._start_paused = start_paused
         self._num_simulators = num_simulators
+        self._target_points = target_points
 
     @classmethod
     def _run_environment(
@@ -88,18 +92,19 @@ class LocalRunner(Runner):
         control_step: float,
         sample_step: float,
         simulation_time: int,
+        target_points: List
     ) -> EnvironmentResults:
         logging.info(f"Environment {env_index}")
 
-        targets_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        targets_points = target_points
         target_counter = 0
 
-        model = cls._make_model(env_descr)
+        model = cls._make_model(env_descr, target_points)
 
         # TODO initial dof state
         data = mujoco.MjData(model)
 
-        vision_obj = OpenGLVision(model, (640, 480), headless)
+        vision_obj = OpenGLVision(model, (640, 480))
 
         initial_targets = [
             dof_state
@@ -112,6 +117,9 @@ class LocalRunner(Runner):
             posed_actor.dof_states
 
         if not headless or record_settings is not None:
+            # delegate rendering to the egl back-end
+            glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API)
+
             viewer = mujoco_viewer.MujocoViewer(
                 model,
                 data,
@@ -224,12 +232,13 @@ class LocalRunner(Runner):
 
         reached_target = False
         
-        if target_counter < 4:
+        if target_counter < len(targets):
             next_target = targets[target_counter]
             dist = math.sqrt((robot_pos[0] - next_target[0])**2 + (robot_pos[1] - next_target[1])**2)
             if dist <= 0.1:
                 model.geom_rgba[1  + target_counter] = transparent
-                model.geom_rgba[1  + target_counter + 1] = green
+                if target_counter < len(targets) - 1:
+                    model.geom_rgba[1  + target_counter + 1] = green
                 reached_target = True
         return reached_target
 
@@ -265,6 +274,7 @@ class LocalRunner(Runner):
                     control_step,
                     sample_step,
                     batch.simulation_time,
+                    self._target_points
                 )
                 for env_index, env_descr in enumerate(batch.environments)
             ]
@@ -275,7 +285,7 @@ class LocalRunner(Runner):
         return results
 
     @staticmethod
-    def _make_model(env_descr: Environment) -> mujoco.MjModel:
+    def _make_model(env_descr: Environment, target_points: List) -> mujoco.MjModel:
         env_mjcf = mjcf.RootElement(model="environment")
 
         env_mjcf.compiler.angle = "radian"
@@ -301,8 +311,8 @@ class LocalRunner(Runner):
             builtin="checker",
             width="512",
             height="512",
-            rgb1=".1 .2 .3",
-            rgb2=".2 .3 .4",
+            rgb1=".2 .2 .2",
+            rgb2=".3 .3 .3",
         )
         env_mjcf.asset.add(
             "material",
@@ -320,7 +330,8 @@ class LocalRunner(Runner):
                     type="plane",
                     pos=[geo.position.x, geo.position.y, geo.position.z],
                     size=[geo.size.x / 2.0, geo.size.y / 2.0, 1.0],
-                    rgba=[geo.color.x, geo.color.y, geo.color.z, 1.0],
+                    rgba=[1., 1., 1., 1.0],
+                    material="grid",
                 )
             elif isinstance(geo, geometry.Heightmap):
                 env_mjcf.asset.add(
@@ -350,13 +361,13 @@ class LocalRunner(Runner):
                 raise NotImplementedError()
 
         # add target points markers
-        target_points = [(0.5, -0.8), (-0.3, -0.8), (-0.3, 0.0), (0.5, 0.0)]
+        target_points = target_points
         i = 0
         env_mjcf.worldbody.add(
             "geom",
             name="target_point_"+str(i),
             pos=[target_points[0][0], target_points[0][1], 0.005],
-            size=[0.1, 0.05],
+            size=[0.1, 0.000001],
             type="cylinder",
             condim=1,
             contype=2,
@@ -369,7 +380,7 @@ class LocalRunner(Runner):
                "geom",
                name="target_point_"+str(i),
                pos=[point[0], point[1], 0.005],
-               size=[0.1, 0.05],
+               size=[0.1, 0.000001],
                type="cylinder",
                condim=1,
                contype=2,
@@ -431,11 +442,11 @@ class LocalRunner(Runner):
             ]
             robot.worldbody.add("camera", name="vision", mode="fixed", dclass=robot.full_identifier,
                                 pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=102)
-            # robot.worldbody.add('site',
-            #                     name=robot.full_identifier[:-1] + "_camera",
-            #                     pos=fps_cam_pos, rgba=[0, 0, 1, 1],
-            #                     type="ellipsoid", size=[0.0001, 0.025, 0.025],
-            #                     xyaxes="0 -1 0 0 0 1")
+            robot.worldbody.add('site',
+                                name=robot.full_identifier[:-1] + "_camera",
+                                pos=fps_cam_pos, rgba=[0, 0, 1, 1],
+                                type="ellipsoid", size=[0.0001, 0.025, 0.025],
+                                xyaxes="0 -1 0 0 0 1")
 
             for joint in posed_actor.actor.joints:
                 robot.actuator.add(
@@ -529,6 +540,12 @@ class LocalRunner(Runner):
 
         if element.tag == "geom":
             element.friction = [0.7, 0.1, 0.1]
+            if math.isclose(element.size[0], 0.044, abs_tol=0.001):
+                element.rgba = [1., 1., 0., 1.]
+            elif math.isclose(element.size[0], 0.031, abs_tol=0.001):
+                element.rgba = [.1, 0., 1., 1.]
+            else:
+                element.rgba = [0., 1., 0., 1.]
 
     @staticmethod
     def _set_parameters(robot):
