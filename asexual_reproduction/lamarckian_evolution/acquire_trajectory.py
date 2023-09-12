@@ -18,49 +18,19 @@ import pandas as pd
 from _optimizer import DbEAOptimizerIndividual
 from revolve2.core.database.serializers import FloatSerializer
 import learning_algorithms.EVO.CPG.terrain as terrains
-import matplotlib.lines as mlines
-from random import Random
-from typing import List, Tuple
 
 
 async def main() -> None:
 
     trajectories = np.zeros((3, 301))
 
-    rng = Random()
-
-    targets = generate_targets(num_targets=2, rng=rng, between_dist=0.8)
-    print(f"Targets: {targets}")
-
-    traj_x, traj_y, traj_z = await run_robot(targets)
+    traj_x, traj_y, traj_z = await run_robot(1,1)
     trajectories[0] = traj_x
     trajectories[1] = traj_y
     trajectories[2] = traj_z
+    np.save('./newtrajectory', trajectories) # output file
 
-    fig, ax = plt.subplots()    
-    ax.scatter(trajectories[0,0], trajectories[1,0], marker=",", zorder=3, color='#450053', s=30)
-    ax.scatter(trajectories[0,-1], trajectories[1,-1], marker=",", zorder=3, color='#2F728F', s=30)
-    target1 = plt.Circle(targets[0], 0.1, color='#FDE723')
-    target2 = plt.Circle(targets[1], 0.1, color='#FDE723')
-    ax.add_patch(target1)
-    ax.add_patch(target2)
-
-
-    ax.plot(trajectories[0], trajectories[1], linewidth=1, color='#2F728F') #firebrick #6C8EBF","#9673A6"
-
-    purple_square = mlines.Line2D([], [], color='#450053', marker='s', linestyle='None',
-                            markersize=10, label='Start point')
-    blue_square = mlines.Line2D([], [], color='#2F728F', marker='s', linestyle='None',
-                            markersize=10, label='End point_Asexual')
-    green_square = mlines.Line2D([], [], color='#62C762', marker='s', linestyle='None',
-                                 markersize=10, label='End point_Sexual')
-    yellow_circle = mlines.Line2D([], [], color='#FDE723', marker='o', linestyle='None',
-                            markersize=10, label='Target point')
-    ax.legend(handles=[purple_square, blue_square, green_square, yellow_circle])
-    plt.title('Lamarckian Evolution')
-    plt.show()
-
-async def run_robot(targets):
+async def run_robot(run, robot):
     db = open_async_database_sqlite('lamarc_asex_database') # database
     async with AsyncSession(db) as session:
         individuals = (
@@ -143,6 +113,9 @@ async def run_robot(targets):
 
     bot = ModularRobot(body, brain)
 
+    targets = [(0.5, -0.5), (-0.2, -1.)]
+    print(f"Targets: {targets}")
+
     rerunner = ModularRobotRerunner()
     traj_x, traj_y, traj_z = await rerunner.rerun(bot, 5, terrains.flat_plane(), targets, record_dir='prova', record=False)
     return traj_x, traj_y, traj_z
@@ -157,20 +130,6 @@ def relative_pos(pos1, pos2):
                 (-1,1):7, (1,-1):8, (2,0):9, (0,2):10, (-2,0):11, (0,-2):12, (0,0):13}
     
     return mapping[(dx,dy)]
-
-def generate_targets(num_targets: int, rng: Random, starting_point: Tuple[int] = (0,0), between_dist: float = 1.) -> List[Tuple[int]]:
-
-    targets = []
-
-    x, y = starting_point
-    for _ in range(num_targets):
-        dx = (rng.random() * (2 * between_dist)) - (1 * between_dist)
-        x = x + dx
-        dy = math.sqrt((between_dist ** 2) - (dx ** 2))
-        y = y - dy
-        targets.append((x, y))
-
-    return targets
 
 if __name__ == "__main__":
     import asyncio
