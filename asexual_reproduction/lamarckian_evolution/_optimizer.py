@@ -17,6 +17,7 @@ from sqlalchemy import Column, Integer, String, Float
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
     DbEAOptimizer,
+    DbEAOptimizerGeneration,
     DbEAOptimizerParent,
     DbEAOptimizerState,
 )
@@ -363,9 +364,8 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         # evaluate initial population if required
         if self.__latest_fitnesses is None:
             logging.info("Evaluating initial population of morphologies")
-            initial_fitnesses, new_genotypes, _ = await self.__safe_evaluate_generation(
+            initial_fitnesses, new_genotypes, = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
-                None,
                 self.__database,
                 self.__db_id,
             )
@@ -407,12 +407,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for s in parent_selections
             ]
 
-            old_genotypes = [ind.genotype for ind in self.__latest_population]
-
             # let user evaluate offspring
-            new_fitnesses, new_genotypes, old_fitnesses = await self.__safe_evaluate_generation(
+            new_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 offspring,
-                old_genotypes,
                 self.__database,
                 self.__db_id
             )
@@ -427,10 +424,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                 for parent_indices, genotype in zip(parent_selections, new_genotypes)
             ]
 
-            # select survivors from old individuals
+            # let user select survivors between old and new individuals
             old_survivors = self.__safe_select_survivors(
                 [i.genotype for i in self.__latest_population],
-                old_fitnesses,
+                self.__latest_fitnesses[1],
                 len(self.__latest_population) - self.__offspring_size,
             )
 
@@ -444,7 +441,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             ] + new_individuals
 
             self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + new_fitnesses[0],
-                                        [old_fitnesses[i] for i in old_survivors] + new_fitnesses[1]]
+                                        [self.__latest_fitnesses[1][i] for i in old_survivors] + new_fitnesses[1]]
 
             # save generation and possibly fitnesses of initial population
             # and let user save their state
@@ -487,13 +484,11 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
     async def __safe_evaluate_generation(
         self,
         genotypes: List[Genotype],
-        old_genotypes: List[Genotype],
         database: AsyncEngine,
         db_id: DbId
     ) -> Tuple[List[Fitness], List[Genotype], List[Fitness]]:
-        fitnesses, new_genotypes, old_fitnesses = await self._evaluate_generation(
+        fitnesses, new_genotypes = await self._evaluate_generation(
             genotypes=genotypes,
-            old_genotypes=old_genotypes,
             database=database,
             db_id=db_id
         )
@@ -508,12 +503,7 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         assert type(starting_fitnesses) == list
         assert len(starting_fitnesses) == len(genotypes)
         assert all(type(e) == self.__fitness_type for e in starting_fitnesses)
-        if old_genotypes is not None:
-            assert type(old_fitnesses) == list
-            assert len(old_fitnesses) == len(old_genotypes)
-            assert all(type(e) == self.__fitness_type for e in old_fitnesses)
-
-        return (starting_fitnesses, final_fitnesses), new_genotypes, old_fitnesses
+        return (starting_fitnesses, final_fitnesses), new_genotypes
 
     def __safe_select_parents(
         self,
@@ -709,7 +699,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     generation_index=self.__generation_index,
                     individual_index=index,
                     individual_id=individual.id,
-                    fitness=self.__latest_fitnesses[1][index]
                 )
                 for index, individual in enumerate(self.__latest_population)
             ]
@@ -759,13 +748,3 @@ class DbEAOptimizerIndividual(DbBase):
     rel_num_bricks = Column(Float, nullable=False)
     rel_num_hinges = Column(Float, nullable=False)
     
-class DbEAOptimizerGeneration(DbBase):
-    """A single generation."""
-
-    __tablename__ = "ea_random_optimizer_generation"
-
-    ea_optimizer_id = Column(Integer, nullable=False, primary_key=True)
-    generation_index = Column(Integer, nullable=False, primary_key=True)
-    individual_index = Column(Integer, nullable=False, primary_key=True)
-    individual_id = Column(Integer, nullable=False)
-    fitness = Column(Float, nullable=False)
