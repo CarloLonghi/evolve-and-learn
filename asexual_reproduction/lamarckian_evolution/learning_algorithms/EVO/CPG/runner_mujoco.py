@@ -104,7 +104,8 @@ class LocalRunner(Runner):
         # TODO initial dof state
         data = mujoco.MjData(model)
 
-        vision_obj = OpenGLVision(model, (640, 480))
+        vision_obj = OpenGLVision(model, (35, 20)) # aspect_ratio = tan(h_fov * 0.5)/tan(v_fov * 0.5)
+        env_descr.controller.set_picture_w(35)
 
         initial_targets = [
             dof_state
@@ -228,7 +229,7 @@ class LocalRunner(Runner):
     @staticmethod
     def update_targets_color(model: mujoco.MjModel, robot_pos, targets: List[float], target_counter: int) -> bool:
         transparent = np.array([0.9, 0.9, 0.9, .0])
-        green = np.array([0.0, 0.9, 0.5, 1.0])
+        target_color = np.array([0.9, 0., 0., 1.0])
 
         reached_target = False
         
@@ -238,7 +239,7 @@ class LocalRunner(Runner):
             if dist <= 0.1:
                 model.geom_rgba[1  + target_counter] = transparent
                 if target_counter < len(targets) - 1:
-                    model.geom_rgba[1  + target_counter + 1] = green
+                    model.geom_rgba[1  + target_counter + 1] = target_color
                 reached_target = True
         return reached_target
 
@@ -372,7 +373,7 @@ class LocalRunner(Runner):
             condim=1,
             contype=2,
             conaffinity=2,
-            rgba="0. .9 .5 1.",
+            rgba=".9 .0 .0 1.",
         )
         i += 1
         for point in target_points[1:]:
@@ -434,14 +435,13 @@ class LocalRunner(Runner):
 
             LocalRunner._set_parameters(robot)
 
-            aabb = posed_actor.actor.calc_aabb()
             fps_cam_pos = [
-                aabb.offset.x - 0.045,
-                aabb.offset.y,
-                aabb.offset.z + 0.07
+                0.0,
+                0.0,
+                0.07
             ]
             robot.worldbody.add("camera", name="vision", mode="fixed", dclass=robot.full_identifier,
-                                pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=102)
+                                pos=fps_cam_pos, xyaxes="1 0 0 0 0 1", fovy=37.9)
             robot.worldbody.add('site',
                                 name=robot.full_identifier[:-1] + "_camera",
                                 pos=fps_cam_pos, rgba=[0, 0, 1, 1],
