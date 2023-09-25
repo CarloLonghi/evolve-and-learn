@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
 
-async def main(body, brain, gen, num) -> None:
+async def main(body, brain, terrain) -> None:
     """Run the optimization process."""
 
     POPULATION_SIZE = 10
@@ -56,6 +56,7 @@ async def main(body, brain, gen, num) -> None:
         num_generations=NUM_GENERATIONS,
         scaling=SCALING,
         cross_prob=CROSS_PROB,
+        terrain=terrain
         )
 
     logging.info("Starting controller optimization process..")

@@ -42,6 +42,8 @@ from revolve2.core.physics.environment_actor_controller import (
     EnvironmentActorController,
 )
 import logging
+import learning_algorithms.EVO.CPG.terrain as terrains
+from revolve2.core.physics import Terrain
 
 class Optimizer(EAOptimizer[Genotype, float]):
     """
@@ -66,6 +68,8 @@ class Optimizer(EAOptimizer[Genotype, float]):
     _num_generations: int
     _grid_size: int
     _num_potential_joints: int
+
+    _terrain: Terrain
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -124,6 +128,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._num_generations = num_generations
         self._grid_size = grid_size
         self._num_potential_joints = ((grid_size**2)-1)
+        self._terrain = terrains.rugged_plane()
 
         # create database structure if not exists
         # TODO this works but there is probably a better way
@@ -211,6 +216,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._control_frequency = control_frequency
         self._num_generations = num_generations
         self._grid_size = grid_size
+        self._terrain = terrains.rugged_plane()
 
         return True
 
@@ -306,7 +312,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             if len(body.find_active_hinges()) <= 0:
                 logging.info("Morphology num " + str(body_num) + " has no active hinges")
             else:
-                learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self.generation_index, body_num)
+                learned_params, final_fitness, starting_fitness = await learn_controller(body, brain_params, self._terrain)
                 for hinge, learned_weight in zip(active_hinges, learned_params[:len(active_hinges)]):
                     pos = body.grid_position(hinge)
                     cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)

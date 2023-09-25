@@ -19,8 +19,7 @@ from revolve2.core.physics.running import (ActorState, Batch,
 from .runner_mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from revolve2.standard_resources import terrains
-import learning_algorithms.EVO.CPG.terrain as terrains
+from revolve2.core.physics import Terrain
 
 class Optimizer(RevDEOptimizer):
     """
@@ -28,8 +27,6 @@ class Optimizer(RevDEOptimizer):
 
     Uses the generic EA optimizer as a base.
     """
-
-    _TERRAIN = terrains.flat_plane()
 
     _body: Body
     _actor: Actor
@@ -44,6 +41,8 @@ class Optimizer(RevDEOptimizer):
 
     _num_generations: int
     _target_points: List[Tuple[float]]
+
+    _terrain: Terrain
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -60,6 +59,7 @@ class Optimizer(RevDEOptimizer):
         num_generations: int,
         scaling: float,
         cross_prob: float,
+        terrain: Terrain
     ) -> None:
         """
         Initialize this class async.
@@ -100,6 +100,7 @@ class Optimizer(RevDEOptimizer):
         self._control_frequency = control_frequency
         self._num_generations = num_generations
         self._target_points = [(1, -1), (0, -2)]
+        self._terrain = terrain
 
     async def ainit_from_database(  # type: ignore # see comment at ainit_new
         self,
@@ -194,7 +195,7 @@ class Optimizer(RevDEOptimizer):
 
             bounding_box = self._actor.calc_aabb()
             env = Environment(EnvironmentActorController(controller, self._target_points, steer=True))
-            env.static_geometries.extend(self._TERRAIN.static_geometry)
+            env.static_geometries.extend(self._terrain.static_geometry)
             env.actors.append(
                 PosedActor(
                     self._actor,

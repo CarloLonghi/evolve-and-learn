@@ -52,6 +52,7 @@ def plot(database: str, db_id: DbId) -> None:
     # plot max min mean, std
     describe[["max", "mean", "min"]].plot()
     plt.fill_between(range(len(mean)), mean - std, mean + std)
+    plt.title("Darwinian Evolution")
     plt.show()
 
 
