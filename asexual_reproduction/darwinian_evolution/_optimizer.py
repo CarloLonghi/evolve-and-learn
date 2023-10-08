@@ -366,8 +366,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             logging.info("Evaluating initial population of morphologies")
             initial_fitnesses, new_genotypes, = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
-                self.__database,
-                self.__db_id,
             )
             self.__latest_fitnesses = initial_fitnesses
             initial_population = self.__latest_population
@@ -410,8 +408,6 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             # let user evaluate offspring
             new_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 offspring,
-                self.__database,
-                self.__db_id
             )
 
             # create individuals with learned controllers
@@ -496,13 +492,10 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
     async def __safe_evaluate_generation(
         self,
         genotypes: List[Genotype],
-        database: AsyncEngine,
-        db_id: DbId
     ) -> Tuple[List[Fitness], List[Genotype], List[Fitness]]:
         fitnesses, new_genotypes = await self._evaluate_generation(
             genotypes=genotypes,
-            database=database,
-            db_id=db_id
+            num_generation=self.generation_index
         )
         starting_fitnesses = fitnesses[0]
         final_fitnesses = fitnesses[1]

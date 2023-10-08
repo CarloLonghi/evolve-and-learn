@@ -25,6 +25,9 @@ async def main() -> None:
 
     GRID_SIZE = 22
 
+    ENVIRONMENT = "FLAT" # type of initial environment
+    CHANGE_FREQUENCY = 7 # environment changing frequency
+
     # database
     database = open_async_database_sqlite("./darw_asex_database", create=True)
 
@@ -64,7 +67,9 @@ async def main() -> None:
         control_frequency=CONTROL_FREQUENCY,
         num_generations=NUM_GENERATIONS,
         offspring_size=OFFSPRING_SIZE,
-        grid_size=GRID_SIZE
+        grid_size=GRID_SIZE,
+        environment=ENVIRONMENT,
+        change_frequency=CHANGE_FREQUENCY
     )
     if maybe_optimizer is not None:
         optimizer = maybe_optimizer
@@ -81,7 +86,9 @@ async def main() -> None:
             control_frequency=CONTROL_FREQUENCY,
             num_generations=NUM_GENERATIONS,
             offspring_size=OFFSPRING_SIZE,
-            grid_size = GRID_SIZE
+            grid_size = GRID_SIZE,
+            environment = ENVIRONMENT,
+            change_frequency=CHANGE_FREQUENCY
         )
 
     logging.info("Starting moprhology optimization")
