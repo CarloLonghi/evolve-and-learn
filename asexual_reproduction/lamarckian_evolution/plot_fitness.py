@@ -10,9 +10,8 @@ from sqlalchemy.future import select
 from revolve2.core.optimization.ea.generic_ea._database import (
     DbBase,
     DbEAOptimizer,
-    DbEAOptimizerGeneration
 )
-from _optimizer import DbEAOptimizerIndividual
+from _optimizer import DbEAOptimizerIndividual, DbEAOptimizerGeneration
 from revolve2.core.database.serializers import FloatSerializer, DbFloat
 from matplotlib import pyplot as plt
 from revolve2.core.optimization import DbId
@@ -27,24 +26,16 @@ def plot(database: str, db_id: DbId) -> None:
         select(
             DbEAOptimizer,
             DbEAOptimizerGeneration,
-            DbEAOptimizerIndividual,
-            DbFloat,
         ).filter(
             (DbEAOptimizer.db_id == db_id.fullname)
             & (DbEAOptimizerGeneration.ea_optimizer_id == DbEAOptimizer.id)
-            & (DbEAOptimizerIndividual.ea_optimizer_id == DbEAOptimizer.id)
-            & (DbEAOptimizerIndividual.final_fitness_id == DbFloat.id)
-            & (
-                DbEAOptimizerGeneration.individual_id
-                == DbEAOptimizerIndividual.individual_id
-            )
         ),
         db,
     )
     describe = (
-        df[["generation_index", "value"]]
+        df[["generation_index", "fitness"]]
         .groupby(by="generation_index")
-        .describe()["value"]
+        .describe()["fitness"]
     )
     mean = describe[["mean"]].values.squeeze()
     std = describe[["std"]].values.squeeze()

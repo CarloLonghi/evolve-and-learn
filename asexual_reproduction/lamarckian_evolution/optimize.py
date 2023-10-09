@@ -26,7 +26,7 @@ async def main() -> None:
     GRID_SIZE = 22
 
     ENVIRONMENT = "FLAT" # type of initial environment
-    CHANGE_FREQUENCY = 7 # environment changing frequency
+    CHANGE_FREQUENCY = 2 # environment changing frequency
 
     # database
     database = open_async_database_sqlite("./lamarc_asex_database", create=True)

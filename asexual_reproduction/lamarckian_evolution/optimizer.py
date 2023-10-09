@@ -19,28 +19,19 @@ from revolve2.core.optimization import DbId
 from _optimizer import EAOptimizer
 from revolve2.core.physics.running import (
     ActorState,
-    Batch,
-    Environment,
-    PosedActor,
     Runner,
 )
 from revolve2.core.modular_robot.brains import (
     BrainCpgNetworkStatic, make_cpg_network_structure_neighbour)
 from learning_algorithms.EVO.CPG.optimize import main as learn_controller
+from rerun_robot import main as rerun_robot
 from revolve2.runners.mujoco import LocalRunner
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.future import select
-import asyncio
 from revolve2.genotypes.cppnwin.modular_robot.body_genotype_v1 import (
     develop_v1 as body_develop,)
-
-from revolve2.core.modular_robot import Body, Brain
-from learning_algorithms.EVO.CPG.optimizer import Optimizer as ControllerOptimizer
-from revolve2.core.physics.environment_actor_controller import (
-    EnvironmentActorController,
-)
 import logging
 import learning_algorithms.EVO.CPG.terrain as terrains
 from revolve2.core.physics import Terrain
@@ -71,6 +62,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
     _env_change_freq: int
     _terrain: Terrain
+    _current_terrain: str
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -132,12 +124,13 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._grid_size = grid_size
         self._num_potential_joints = ((grid_size**2)-1)
         self._env_change_freq = change_frequency
-        if environment == "FLAT":
+        self._current_terrain = environment.upper()
+        if environment.upper() == "FLAT":
             self._terrain = terrains.flat_plane()
-        elif environment == "RUGGED":
+        elif environment.upper() == "RUGGED":
             self._terrain = terrains.rugged_plane()
         else:
-            self._terrain = None
+            raise ValueError("The environment must be of type flat or rugged")
 
         # create database structure if not exists
         # TODO this works but there is probably a better way
@@ -228,12 +221,13 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._num_generations = num_generations
         self._grid_size = grid_size
         self._env_change_freq = change_frequency
-        if environment == "FLAT":
+        self._current_terrain = environment.upper()
+        if environment.upper() == "FLAT":
             self._terrain = terrains.flat_plane()
-        elif environment == "RUGGED":
+        elif environment.upper() == "RUGGED":
             self._terrain = terrains.rugged_plane()
         else:
-            self._terrain = None
+            raise ValueError("The environment must be of type flat or rugged")
 
         return True
 
@@ -277,11 +271,14 @@ class Optimizer(EAOptimizer[Genotype, float]):
     async def _evaluate_generation(
         self,
         genotypes: List[Genotype],
+        old_genotypes: List[Genotype],
+        original_fitnesses: List[float],
         num_generation: int        
     ) -> Tuple[List[float], List[Genotype]]:
 
         final_fitnesses = []
         starting_fitnesses = []
+        old_fitnesses = []
 
         new_genotypes = []
 
@@ -292,13 +289,66 @@ class Optimizer(EAOptimizer[Genotype, float]):
         if num_generation > 0 and self._env_change_freq > 0:
             gen_before_change = math.ceil((self._num_generations + 1) / (self._env_change_freq + 1))
             if num_generation % gen_before_change == 0:
-                if (num_generation  // gen_before_change) % 2 == 0:
-                    self._terrain = terrains.flat_plane()
-                    logging.info('new terrain = FLAT')
-                else:
+                if self._current_terrain == "FLAT":
                     self._terrain = terrains.rugged_plane()
+                    self._current_terrain = "RUGGED"
                     logging.info('new terrain: RUGGED')
+                elif self._current_terrain == "RUGGED":             
+                    self._terrain = terrains.flat_plane()
+                    self._current_terrain = "FLAT"
+                    logging.info('new terrain = FLAT')
 
+                # evaluate old genotypes on the new environment
+                if old_genotypes is not None:
+                    old_body_genotypes = [genotype.body for genotype in old_genotypes]
+                    old_brain_genotypes = [genotype.brain for genotype in old_genotypes]                    
+
+                    for body_num, (body_genotype, brain_genotype) in enumerate(zip(old_body_genotypes, old_brain_genotypes)):
+                        body = body_develop(body_genotype)
+                        _, dof_ids = body.to_actor()
+                        active_hinges_unsorted = body.find_active_hinges()
+                        active_hinge_map = {
+                            active_hinge.id: active_hinge for active_hinge in active_hinges_unsorted
+                        }
+                        active_hinges = [active_hinge_map[id] for id in dof_ids]
+                        cpg_network_structure = make_cpg_network_structure_neighbour(
+                            active_hinges
+                        )
+                        brain_params = []
+                        for hinge in active_hinges:
+                            pos = body.grid_position(hinge)
+                            cpg_idx = int(pos[0] + pos[1] * self._grid_size + self._grid_size**2 / 2)
+                            brain_params.append(brain_genotype.params_array[
+                                cpg_idx*14
+                            ])
+    
+                        for connection in cpg_network_structure.connections:
+                            hinge1 = connection.cpg_index_highest.index
+                            pos1 = body.grid_position(active_hinges[hinge1])
+                            cpg_idx1 = int(pos1[0] + pos1[1] * self._grid_size + self._grid_size**2 / 2)
+                            hinge2 = connection.cpg_index_lowest.index
+                            pos2 = body.grid_position(active_hinges[hinge2])
+                            cpg_idx2 = int(pos2[0] + pos2[1] * self._grid_size + self._grid_size**2 / 2)
+                            rel_pos = relative_pos(pos1[:2], pos2[:2])
+                            idx = max(cpg_idx1, cpg_idx2)
+                            brain_params.append(brain_genotype.params_array[
+                                idx*14 + rel_pos
+                            ])
+
+                        logging.info("Starting the re-evaluation of the robot num: " + str(body_num))
+
+                        new_fitness = 0.0
+                        # check that the morphology has at least one active hinge. Otherwise the maximum fitness is 0
+                        if len(body.find_active_hinges()) <= 0:
+                            logging.info("Old robot num " + str(body_num) + " has no active hinges")
+                        else:
+                            new_fitness = await rerun_robot(body, brain_params, self._terrain)
+
+                        old_fitnesses.append(new_fitness)
+            else:
+                old_fitnesses = original_fitnesses.copy()
+
+        # the new genotypes go through the learning phase before being evaluated
         for body_num, (body_genotype, brain_genotype) in enumerate(zip(body_genotypes, brain_genotypes)):
             body = body_develop(body_genotype)
             _, dof_ids = body.to_actor()
@@ -367,7 +417,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
             final_fitnesses.append(final_fitness)
             starting_fitnesses.append(starting_fitness)
 
-        return (starting_fitnesses, final_fitnesses), new_genotypes
+        return (starting_fitnesses, final_fitnesses), new_genotypes, old_fitnesses
 
     @staticmethod
     def _calculate_fitness(begin_state: ActorState, end_state: ActorState) -> float:
@@ -421,7 +471,7 @@ class DbOptimizerState(DbBase):
     control_frequency = sqlalchemy.Column(sqlalchemy.Float, nullable=False)
     num_generations = sqlalchemy.Column(sqlalchemy.Integer, nullable=False)
 
-def relative_pos(pos1, pos2):
+def relative_pos(pos1, pos2) -> int:
     dx = pos2[0] - pos1[0]
     dy = pos2[1] - pos1[1]
 
