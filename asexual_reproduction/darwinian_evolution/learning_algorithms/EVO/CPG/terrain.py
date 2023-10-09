@@ -12,9 +12,9 @@ def flat_plane(size: Vector3 = Vector3([20.0, 20.0, 0.0])) -> Terrain:
     return flat(size)
 
 def rugged_plane(
-    size: Tuple[float, float],
-    ruggedness: float,
-    granularity_multiplier: float = 1.0,
+    size: Tuple[float, float] = Vector3([3.0, 3.0, 0.0]),
+    ruggedness: float = 0.06,
+    granularity_multiplier: float = 0.2,
 ) -> Terrain:
     
     NUM_EDGES = 100  # arbitrary constant to get a nice number of edges
@@ -24,7 +24,7 @@ def rugged_plane(
         int(NUM_EDGES * size[1] * granularity_multiplier),
     )
 
-    rugged = rugged_heightmap(
+    rugged = real_heightmap(
         size=size,
         num_edges=num_edges,
         density=1.5,
@@ -36,17 +36,43 @@ def rugged_plane(
         max_height = 1.0
     else:
         heightmap = rugged
+        heightmap /= heightmap.max() # normalize heightmap to get correct max height
 
     return Terrain(
         static_geometry=[
             geometry.Heightmap(
-                position=Vector3(),
+                position=Vector3([0, 0, 0]),
                 orientation=Quaternion(),
                 size=Vector3([size[0], size[1], max_height]),
                 base_thickness=0.1 + ruggedness,
                 heights=heightmap,
-            )
+            ),
         ]
+    )
+
+def real_heightmap(
+    size: Tuple[float, float],
+    num_edges: Tuple[int, int],
+    density: float = 1.0,
+) -> npt.NDArray[np.float_]:
+    OCTAVE = 10
+    C1 = 4.0  # arbitrary constant to get nice noise
+
+    obstacle_freq = 3
+    dim_obstacle = 2
+
+    return np.fromfunction(
+        np.vectorize(
+            lambda y, x: abs(pnoise2(
+                x / num_edges[0] * C1 * size[0] * density,
+                y / num_edges[1] * C1 * size[1] * density,
+                OCTAVE,
+            )) if (x % obstacle_freq) < dim_obstacle and (y % obstacle_freq) < dim_obstacle else
+            0.,
+            otypes=[float],
+        ),
+        num_edges,
+        dtype=float,
     )
 
 
