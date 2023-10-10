@@ -363,10 +363,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         # evaluate initial population if required
         if self.__latest_fitnesses is None:
             logging.info("Evaluating initial population of morphologies")
-            initial_fitnesses, new_genotypes, _ = await self.__safe_evaluate_generation(
+            initial_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 [i.genotype for i in self.__latest_population],
-                None,
-                None
+                [],
             )
             self.__latest_fitnesses = initial_fitnesses
             for i, ind in enumerate(self.__latest_population):
@@ -416,10 +415,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
             old_genotypes = [self.__latest_population[i].genotype for i in old_survivors]
 
             # let user evaluate offspring
-            new_fitnesses, new_genotypes, old_fitnesses = await self.__safe_evaluate_generation(
+            new_fitnesses, new_genotypes = await self.__safe_evaluate_generation(
                 offspring,
                 old_genotypes,
-                [self.__latest_fitnesses[1][i] for i in old_survivors]
             )
 
             # combine to create list of individuals
@@ -429,20 +427,30 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     genotype,
                     [self.__latest_population[i].id for i in parent_indices],
                 )
-                for parent_indices, genotype in zip(parent_selections, new_genotypes)
+                for parent_indices, genotype in zip(parent_selections, new_genotypes[:self.__offspring_size])
             ]
+            if len(new_genotypes) == len(self.__latest_population):
+                new_individuals = new_individuals + [
+                    _Individual(
+                        -1,  # placeholder until later
+                        genotype,
+                        parent_ids,
+                    )
+                    for parent_ids, genotype in zip([self.__latest_population[i].parent_ids for i in old_survivors], new_genotypes[self.__offspring_size:])
+                ]                
 
             # set ids for new individuals
             for individual in new_individuals:
                 individual.id = self.__gen_next_individual_id()
 
             # combine old and new and store as the new generation
-            self.__latest_population = [
-                self.__latest_population[i] for i in old_survivors
-            ] + new_individuals
-
-            self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + new_fitnesses[0],
-                                        old_fitnesses + new_fitnesses[1]]
+            if len(new_genotypes) == len(self.__latest_population):
+                self.__latest_population = new_individuals
+                self.__latest_fitnesses = [new_fitnesses[0], new_fitnesses[1]]
+            else:
+                self.__latest_population = [self.__latest_population[i] for i in old_survivors] + new_individuals
+                self.__latest_fitnesses = [[self.__latest_fitnesses[0][i] for i in old_survivors] + new_fitnesses[0],
+                                            [self.__latest_fitnesses[1][i] for i in old_survivors] + new_fitnesses[1]]
 
             # save generation and possibly fitnesses of initial population
             # and let user save their state
@@ -486,30 +494,21 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
         self,
         genotypes: List[Genotype],
         old_genotypes: List[Genotype],
-        original_fitnesses: List[float]
     ) -> Tuple[List[Fitness], List[Genotype], List[Fitness]]:
-        fitnesses, new_genotypes, old_fitnesses = await self._evaluate_generation(
+        fitnesses, new_genotypes = await self._evaluate_generation(
             genotypes=genotypes,
             old_genotypes=old_genotypes,
-            original_fitnesses=original_fitnesses,
             num_generation=self.generation_index
         )
         starting_fitnesses = fitnesses[0]
         final_fitnesses = fitnesses[1]
         assert type(final_fitnesses) == list
-        assert len(final_fitnesses) == len(genotypes)
         assert all(type(e) == self.__fitness_type for e in final_fitnesses)
         assert type(new_genotypes) == list
-        assert len(new_genotypes) == len(genotypes)
         assert all(type(e) == self.__genotype_type for e in new_genotypes)
         assert type(starting_fitnesses) == list
-        assert len(starting_fitnesses) == len(genotypes)
         assert all(type(e) == self.__fitness_type for e in starting_fitnesses)
-        if old_genotypes is not None:
-            assert type(old_fitnesses) == list
-            assert len(old_fitnesses) == len(old_genotypes)
-            assert all(type(e) == self.__fitness_type for e in old_fitnesses)
-        return (starting_fitnesses, final_fitnesses), new_genotypes, old_fitnesses
+        return (starting_fitnesses, final_fitnesses), new_genotypes
     def __safe_select_parents(
         self,
         population: List[Genotype],

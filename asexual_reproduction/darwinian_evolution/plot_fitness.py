@@ -35,19 +35,8 @@ def plot(database: str, db_id: DbId) -> None:
     describe = (
         df[["generation_index", "fitness"]]
         .groupby(by="generation_index")
-        .describe()
+        .describe()["fitness"]
     )
-
-    df.to_csv('change_env.csv')
-
-    a = df[["generation_index", "individual_id", "fitness"]].groupby(by="generation_index")['fitness'].transform(max) == df['fitness']
-    b = df[a]
-    print(b[['individual_id', 'fitness', 'generation_index']])
-
-    c = df[["generation_index", "fitness"]].groupby(by="generation_index").max('fitness')
-    plt.plot(c)
-    plt.show()
-
     mean = describe[["mean"]].values.squeeze()
     std = describe[["std"]].values.squeeze()
 
