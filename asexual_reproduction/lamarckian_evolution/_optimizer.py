@@ -434,9 +434,9 @@ class EAOptimizer(Process, Generic[Genotype, Fitness]):
                     _Individual(
                         -1,  # placeholder until later
                         genotype,
-                        parent_ids,
+                        [parent_id, -1],
                     )
-                    for parent_ids, genotype in zip([self.__latest_population[i].parent_ids for i in old_survivors], new_genotypes[self.__offspring_size:])
+                    for parent_id, genotype in zip([self.__latest_population[i].id for i in old_survivors], new_genotypes[self.__offspring_size:])
                 ]                
 
             # set ids for new individuals
