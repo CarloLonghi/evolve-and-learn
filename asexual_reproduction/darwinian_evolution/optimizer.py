@@ -63,7 +63,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
     _env_change_freq: int
     _terrain: Terrain
-    _current_terrain: str
+    _initial_terrain: str
 
     async def ainit_new(  # type: ignore # TODO for now ignoring mypy complaint about LSP problem, override parent's ainit
         self,
@@ -125,15 +125,15 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._grid_size = grid_size
         self._num_potential_joints = ((grid_size**2)-1)
         self._env_change_freq = change_frequency
-        self._current_terrain = environment.upper()
+        self._initial_terrain = environment.upper()
         if environment.upper() == "FLAT":
             self._terrain = terrains.flat_plane()
         elif environment.upper() == "RUGGED":
             self._terrain = terrains.rugged_plane()
         else:
             raise ValueError("The environment must be of type flat or rugged")
+        logging.info(f'terrain = {self._initial_terrain}')
             
-
         # create database structure if not exists
         # TODO this works but there is probably a better way
         await (await session.connection()).run_sync(DbBase.metadata.create_all)
@@ -223,7 +223,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
         self._num_generations = num_generations
         self._grid_size = grid_size
         self._env_change_freq = change_frequency
-        self._current_terrain = environment.upper()
+        self._initial_terrain = environment.upper()
         if environment.upper() == "FLAT":
             self._terrain = terrains.flat_plane()
         elif environment.upper() == "RUGGED":
@@ -284,19 +284,24 @@ class Optimizer(EAOptimizer[Genotype, float]):
 
         body_genotypes = [genotype.body for genotype in genotypes]
         brain_genotypes = [genotype.brain for genotype in genotypes]
-        
+
         # update terrain if the environment is dynamic
         if num_generation > 0 and self._env_change_freq > 0:
             gen_before_change = math.ceil((self._num_generations + 1) / (self._env_change_freq + 1))
-            if num_generation % gen_before_change == 0:
-                if self._current_terrain == "FLAT":
-                    self._terrain = terrains.rugged_plane()
-                    self._current_terrain = "RUGGED"
-                    logging.info('new terrain: RUGGED')
-                elif self._current_terrain == "RUGGED":             
+            if self._initial_terrain == "FLAT":
+                if (num_generation // gen_before_change) % 2 == 0:
                     self._terrain = terrains.flat_plane()
-                    self._current_terrain = "FLAT"
-                    logging.info('new terrain = FLAT')
+                    logging.info('terrain: FLAT')
+                else:             
+                    self._terrain = terrains.rugged_plane()
+                    logging.info('terrain = RUGGED')
+            elif self._initial_terrain == "RUGGED":
+                if (num_generation // gen_before_change) % 2 == 0:
+                    self._terrain = terrains.rugged_plane()
+                    logging.info('terrain = RUGGED')
+                else:
+                    self._terrain = terrains.flat_plane()
+                    logging.info('terrain: FLAT')
 
                 # add the old individuals to the ones that are going to be evaluated so they are evaluated on the new environment
                 old_body_genotypes = [genotype.body for genotype in old_genotypes]
