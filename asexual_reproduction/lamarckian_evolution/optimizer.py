@@ -302,6 +302,7 @@ class Optimizer(EAOptimizer[Genotype, float]):
                     self._terrain = terrains.flat_plane()
                     logging.info('terrain: FLAT')
 
+            if num_generation % gen_before_change == 0:
                 # add the old individuals to the ones that are going to be evaluated so they are evaluated on the new environment
                 old_body_genotypes = [genotype.body for genotype in old_genotypes]
                 old_brain_genotypes = [genotype.brain for genotype in old_genotypes]
