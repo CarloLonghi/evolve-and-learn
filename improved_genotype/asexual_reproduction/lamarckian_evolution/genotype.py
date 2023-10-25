@@ -242,11 +242,11 @@ def mutate(
 
 
 def crossover(
-    original_body,
     parent1: Genotype,
     parent2: Genotype,
     rng: Random,
-    first_best: bool
+    first_best: bool,
+    innov_db_body: multineat.InnovationDatabase,
 ) -> Genotype:
     """
     Perform crossover between two genotypes.
@@ -257,6 +257,14 @@ def crossover(
     :returns: A newly created genotype.
     """
     multineat_rng = _multineat_rng_from_random(rng)
+
+    random_body = body_random(
+            innov_db_body,
+            multineat_rng,
+            _MULTINEAT_PARAMS,
+            multineat.ActivationFunction.TANH,
+            10,
+    )
 
     brain = brain_crossover(
             parent1.brain,
@@ -271,7 +279,7 @@ def crossover(
         random_seed = parent2.random_seed
 
     return Genotype(
-        original_body,
+        random_body,
         brain,
         random_seed
     )
